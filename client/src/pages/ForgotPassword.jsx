@@ -25,15 +25,17 @@ function ForgotPassword() {
 
   return (
     <div style={{
-      height: "100dvh",
-      background: "#0B0F19",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
+      minHeight: "100vh",
+      width: "100%",
+      overflowY: "auto",
+      overflowX: "hidden",
+      background: "radial-gradient(circle at 10% 10%, #BFDBFE 0%, transparent 30%), radial-gradient(circle at 90% 20%, #DDD6FE 0%, transparent 30%), radial-gradient(circle at 50% 90%, #CFFAFE 0%, transparent 35%), #F8FAFC",
+      padding: "48px 24px 80px",
       fontFamily: "sans-serif",
-      padding: "1rem",
-      overflow: "hidden",
       boxSizing: "border-box",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
     }}>
       <style>{`
         .s-input {
@@ -70,25 +72,47 @@ function ForgotPassword() {
         .fp-btn:hover { opacity: .92; transform: translateY(-1px); }
         .fp-btn:active { transform: scale(.98); }
         .fp-btn:disabled { opacity: .5; cursor: not-allowed; }
-        .glow { position: absolute; border-radius: 50%; filter: blur(80px); pointer-events: none; }
+        
+        .trust-stars {
+          color: #F59E0B;
+          font-size: 20px;
+          letter-spacing: 2px;
+        }
+        
+        .support-link {
+          color: #7C6CF0;
+          text-decoration: none;
+          font-weight: 500;
+          transition: color .2s;
+        }
+        .support-link:hover {
+          color: #5B4FE0;
+          text-decoration: underline;
+        }
+        
+        .footer-link {
+          color: #6B7280;
+          text-decoration: none;
+          font-size: 13px;
+          transition: color .2s;
+        }
+        .footer-link:hover {
+          color: #374151;
+        }
       `}</style>
 
-      <div className="glow" style={{ width: 320, height: 320, background: "#7C6CF0", opacity: 0.12, top: "-80px", left: "-60px" }} />
-      <div className="glow" style={{ width: 260, height: 260, background: "#33C9E8", opacity: 0.1, bottom: "-60px", right: "-60px" }} />
-
-      <div   className="auth-card-content" style={{
-        position: "relative", zIndex: 10,
+      {/* Forgot Password Card */}
+      <div style={{
         background: "#151B2B",
         border: "1px solid #232B3D",
         borderRadius: "18px",
         padding: "1.7rem 1.9rem 1.5rem",
-        width: "100%", maxWidth: "370px",
-        maxHeight: "90dvh",
-        overflow: "hidden",
+        width: "100%",
+        maxWidth: "370px",
         boxShadow: "0 20px 60px rgba(0,0,0,0.5)",
         boxSizing: "border-box",
+        position: "relative",
       }}>
-
         <div style={{ textAlign: "center", marginBottom: "1.3rem" }}>
           <div style={{
             width: 44, height: 44, borderRadius: "12px",
@@ -160,6 +184,80 @@ function ForgotPassword() {
           </Link>
         </p>
       </div>
+
+      {/* Trust Section */}
+      <div style={{
+        marginTop: "32px",
+        textAlign: "center",
+        maxWidth: "370px",
+        width: "100%",
+      }}>
+        <div className="trust-stars">
+          ★★★★★
+        </div>
+        <p style={{
+          color: "#1F2937",
+          fontSize: "14px",
+          fontWeight: "500",
+          margin: "8px 0 0 0",
+        }}>
+          Trusted by students worldwide
+        </p>
+      </div>
+
+      {/* Support/Help Section */}
+      <div style={{
+        marginTop: "24px",
+        textAlign: "center",
+        maxWidth: "370px",
+        width: "100%",
+        padding: "20px",
+        background: "rgba(255,255,255,0.6)",
+        backdropFilter: "blur(10px)",
+        borderRadius: "12px",
+        border: "1px solid rgba(255,255,255,0.3)",
+      }}>
+        <p style={{
+          color: "#1F2937",
+          fontSize: "14px",
+          margin: 0,
+        }}>
+          💬 Need help?{" "}
+          <a href="/support" className="support-link">Contact support</a>
+          {" "}or check our{" "}
+          <a href="/docs" className="support-link">documentation</a>.
+        </p>
+      </div>
+
+      {/* Footer */}
+      <footer style={{
+        marginTop: "40px",
+        width: "100%",
+        maxWidth: "370px",
+        textAlign: "center",
+        borderTop: "1px solid #E5E7EB",
+        paddingTop: "24px",
+      }}>
+        <div style={{
+          display: "flex",
+          justifyContent: "center",
+          gap: "20px",
+          flexWrap: "wrap",
+          marginBottom: "12px",
+        }}>
+          <a href="/about" className="footer-link">About</a>
+          <a href="/privacy" className="footer-link">Privacy</a>
+          <a href="/terms" className="footer-link">Terms</a>
+          <a href="/contact" className="footer-link">Contact</a>
+        </div>
+        <p style={{
+          color: "#9CA3AF",
+          fontSize: "12px",
+          margin: 0,
+        }}>
+          © {new Date().getFullYear()} Your App. All rights reserved.
+        </p>
+      </footer>
     </div>
   );
 }

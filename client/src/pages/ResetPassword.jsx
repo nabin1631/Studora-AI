@@ -56,42 +56,42 @@ function ResetPassword() {
   };
 
   return (
-    <div style={{
-      height: "100dvh",
-      background: "#0B0F19",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      fontFamily: "sans-serif",
-      padding: "1rem",
-      overflow: "hidden",
-      boxSizing: "border-box",
-    }}>
+    <div
+      style={{
+        minHeight: "100vh",
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "space-between",
+        background:
+          "radial-gradient(circle at 10% 10%, #BFDBFE 0%, transparent 30%), radial-gradient(circle at 90% 20%, #DDD6FE 0%, transparent 30%), radial-gradient(circle at 50% 90%, #CFFAFE 0%, transparent 35%), #F8FAFC",
+        fontFamily: "sans-serif",
+      }}
+    >
       <style>{`
         .s-input {
           width: 100%;
           padding: 10px 14px;
-          background: #0F1422;
-          border: 1.5px solid #2A3142;
+          background: #F8FAFC;
+          border: 1.5px solid #E2E8F0;
           border-radius: 10px;
-          color: #F1F3F9;
+          color: #0F172A;
           font-size: 13px;
           outline: none;
           box-sizing: border-box;
           transition: border-color .2s, box-shadow .2s;
         }
-        .s-input::placeholder { color: #5B6478; }
+        .s-input::placeholder { color: #94A3B8; }
         .s-input:focus {
           border-color: #7C6CF0;
           box-shadow: 0 0 0 3px rgba(124,108,240,0.15);
         }
         .eye-btn {
           background: none; border: none; cursor: pointer;
-          color: #5B6478; padding: 6px; border-radius: 6px;
+          color: #94A3B8; padding: 6px; border-radius: 6px;
           display: flex; align-items: center; justify-content: center;
           transition: color .15s, background .15s;
         }
-        .eye-btn:hover { color: #A5ADC2; background: rgba(255,255,255,0.04); }
+        .eye-btn:hover { color: #0F172A; background: rgba(0,0,0,0.04); }
         .rp-btn {
           width: 100%; padding: 12px;
           background: linear-gradient(135deg, #7C6CF0, #5B4FE0);
@@ -104,132 +104,327 @@ function ResetPassword() {
         .rp-btn:hover { opacity: .92; transform: translateY(-1px); }
         .rp-btn:active { transform: scale(.98); }
         .rp-btn:disabled { opacity: .5; cursor: not-allowed; }
-        .glow { position: absolute; border-radius: 50%; filter: blur(80px); pointer-events: none; }
+        
+        .back-link {
+          color: #7C6CF0;
+          font-weight: 600;
+          text-decoration: none;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          transition: transform .2s;
+        }
+        .back-link:hover {
+          transform: translateX(-3px);
+        }
+        
+        .footer-link {
+          color: #94A3B8;
+          text-decoration: none;
+          font-size: 12px;
+          transition: color .2s;
+        }
+        .footer-link:hover {
+          color: #7C6CF0;
+        }
+        
+        .auth-footer {
+          margin-top: 24px;
+          padding-top: 20px;
+          border-top: 1px solid #E2E8F0;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 10px;
+          opacity: 0;
+          animation: footerFadeIn 0.6s ease-out forwards;
+        }
+        
+        @keyframes footerFadeIn {
+          from {
+            opacity: 0;
+            transform: translateY(8px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        
+        @keyframes dividerFadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        
+        .auth-divider {
+          border-top: 1px solid #E2E8F0;
+          margin: 0;
+          animation: dividerFadeIn 0.8s ease-out;
+        }
+        
+        .footer-links {
+          display: flex;
+          gap: 18px;
+          flex-wrap: wrap;
+          justify-content: center;
+        }
+        
+        .footer-security {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          color: #64748B;
+          font-size: 12px;
+          font-weight: 600;
+        }
       `}</style>
 
-      <div className="glow" style={{ width: 320, height: 320, background: "#7C6CF0", opacity: 0.12, top: "-80px", left: "-60px" }} />
-      <div className="glow" style={{ width: 260, height: 260, background: "#33C9E8", opacity: 0.1, bottom: "-60px", right: "-60px" }} />
-
-      <div   className="auth-card-content"style={{
-        position: "relative", zIndex: 10,
-        background: "#151B2B",
-        border: "1px solid #232B3D",
-        borderRadius: "18px",
-        padding: "1.5rem 1.8rem 1.4rem",
-        width: "100%", maxWidth: "380px",
-        maxHeight: "90dvh",
-        overflow: "hidden",
-        boxShadow: "0 20px 60px rgba(0,0,0,0.5)",
-        boxSizing: "border-box",
-      }}>
-
-        <div style={{ textAlign: "center", marginBottom: "1.1rem" }}>
-          <div style={{
-            width: 40, height: 40, borderRadius: "11px",
-            background: "linear-gradient(135deg, #7C6CF0, #33C9E8)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            margin: "0 auto 10px", fontSize: "18px",
-            boxShadow: "0 8px 24px rgba(124,108,240,0.35)",
-          }}>
-            🔒
+      {/* Center Section */}
+      <div
+        style={{
+          flex: 1,
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          padding: "40px 20px",
+        }}
+      >
+        <div
+          style={{
+            width: "100%",
+            maxWidth: "400px",
+            background: "#FFFFFF",
+            borderRadius: "20px",
+            padding: "40px 32px",
+            boxShadow: "0 20px 60px rgba(0,0,0,0.08)",
+            border: "1px solid rgba(226,232,240,0.6)",
+          }}
+        >
+          {/* Header */}
+          <div style={{ textAlign: "center", marginBottom: "32px" }}>
+            <div
+              style={{
+                width: 56,
+                height: 56,
+                borderRadius: "16px",
+                background: "linear-gradient(135deg, #7C6CF0, #33C9E8)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                margin: "0 auto 16px",
+                fontSize: "24px",
+                boxShadow: "0 8px 24px rgba(124,108,240,0.25)",
+              }}
+            >
+              🔒
+            </div>
+            <h1
+              style={{
+                fontSize: "22px",
+                fontWeight: "700",
+                color: "#0F172A",
+                margin: "0 0 8px",
+              }}
+            >
+              Reset your password
+            </h1>
+            <p
+              style={{
+                fontSize: "14px",
+                color: "#64748B",
+                margin: 0,
+                lineHeight: "1.6",
+              }}
+            >
+              Paste the token from your email
+            </p>
           </div>
-          <h1 style={{ fontSize: "17px", fontWeight: "700", color: "#F1F3F9", margin: "0 0 3px" }}>
-            Reset your password
-          </h1>
-          <p style={{ fontSize: "11px", color: "#7B8499", margin: 0 }}>
-            Paste the token from your email
-          </p>
+
+          {error && (
+            <div
+              style={{
+                background: "#FEF2F2",
+                border: "1px solid #FECACA",
+                color: "#DC2626",
+                padding: "10px 14px",
+                borderRadius: "10px",
+                fontSize: "13px",
+                marginBottom: "20px",
+                textAlign: "center",
+              }}
+            >
+              {error}
+            </div>
+          )}
+
+          {success ? (
+            <div
+              style={{
+                background: "#F0FDF4",
+                border: "1px solid #BBF7D0",
+                color: "#16A34A",
+                padding: "12px 14px",
+                borderRadius: "10px",
+                fontSize: "13px",
+                textAlign: "center",
+                lineHeight: "1.5",
+              }}
+            >
+              ✓ Password reset successful!<br />Redirecting to login...
+            </div>
+          ) : (
+            <form onSubmit={handleSubmit}>
+              <div style={{ marginBottom: "16px" }}>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "12px",
+                    fontWeight: "600",
+                    color: "#0F172A",
+                    marginBottom: "6px",
+                  }}
+                >
+                  Reset Token
+                </label>
+                <input
+                  className="s-input"
+                  type="text"
+                  placeholder="Paste token from email"
+                  value={token}
+                  onChange={(e) => setToken(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div style={{ marginBottom: "16px" }}>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "12px",
+                    fontWeight: "600",
+                    color: "#0F172A",
+                    marginBottom: "6px",
+                  }}
+                >
+                  New Password
+                </label>
+                <div style={{ position: "relative" }}>
+                  <input
+                    className="s-input"
+                    type={showPass ? "text" : "password"}
+                    placeholder=" Enter Min 8 characters"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    style={{ paddingRight: "44px" }}
+                  />
+                  <button
+                    type="button"
+                    className="eye-btn"
+                    onClick={() => setShowPass(!showPass)}
+                    style={{
+                      position: "absolute",
+                      right: "6px",
+                      top: "50%",
+                      transform: "translateY(-50%)",
+                    }}
+                    aria-label={showPass ? "Hide password" : "Show password"}
+                  >
+                    <EyeIcon open={showPass} />
+                  </button>
+                </div>
+              </div>
+
+              <div style={{ marginBottom: "24px" }}>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "12px",
+                    fontWeight: "600",
+                    color: "#0F172A",
+                    marginBottom: "6px",
+                  }}
+                >
+                  Confirm New Password
+                </label>
+                <div style={{ position: "relative" }}>
+                  <input
+                    className="s-input"
+                    type={showConfirm ? "text" : "password"}
+                    placeholder="Re-enter new password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    required
+                    style={{ paddingRight: "44px" }}
+                  />
+                  <button
+                    type="button"
+                    className="eye-btn"
+                    onClick={() => setShowConfirm(!showConfirm)}
+                    style={{
+                      position: "absolute",
+                      right: "6px",
+                      top: "50%",
+                      transform: "translateY(-50%)",
+                    }}
+                    aria-label={showConfirm ? "Hide password" : "Show password"}
+                  >
+                    <EyeIcon open={showConfirm} />
+                  </button>
+                </div>
+              </div>
+
+              <button className="rp-btn" type="submit" disabled={loading}>
+                {loading ? "Resetting..." : "Reset Password"}
+              </button>
+            </form>
+          )}
+
+          {/* Back to Login */}
+          <div style={{ marginTop: "24px", textAlign: "center" }}>
+            <Link to="/login" className="back-link">
+              ← Back to Login
+            </Link>
+          </div>
+
+          {/* Auth Footer */}
+          <div className="auth-footer">
+            <hr className="auth-divider" style={{ width: "100%" }} />
+
+            <div className="footer-security">
+              <span>🛡</span>
+              <span>Secure Password Reset</span>
+            </div>
+
+            <p
+              style={{
+                fontSize: "12px",
+                color: "#94A3B8",
+                margin: 0,
+                textAlign: "center",
+                lineHeight: "1.6",
+              }}
+            >
+              Your password is encrypted and securely transmitted.
+            </p>
+
+            <div className="footer-links">
+              <a href="#" className="footer-link">Privacy</a>
+              <a href="#" className="footer-link">Terms</a>
+              <a href="#" className="footer-link">Help Center</a>
+            </div>
+
+            <p
+              style={{
+                fontSize: "11px",
+                color: "#94A3B8",
+                margin: 0,
+              }}
+            >
+              © 2026 Studora AI
+            </p>
+          </div>
         </div>
-
-        {error && (
-          <div style={{
-            background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.25)",
-            color: "#FCA5A5", padding: "8px 12px", borderRadius: "9px",
-            fontSize: "12px", marginBottom: "12px",
-          }}>
-            {error}
-          </div>
-        )}
-
-        {success ? (
-          <div style={{
-            background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.25)",
-            color: "#86EFAC", padding: "12px 14px", borderRadius: "10px",
-            fontSize: "13px", textAlign: "center", lineHeight: "1.5",
-          }}>
-            ✓ Password reset successful!<br />Redirecting to login...
-          </div>
-        ) : (
-          <form onSubmit={handleSubmit}>
-            <div style={{ marginBottom: "9px" }}>
-              <label style={{ display: "block", fontSize: "11px", fontWeight: "500", color: "#A5ADC2", marginBottom: "5px" }}>
-                Reset Token
-              </label>
-              <input
-                className="s-input"
-                type="text"
-                placeholder="Paste token from email"
-                value={token}
-                onChange={(e) => setToken(e.target.value)}
-                required
-              />
-            </div>
-
-            <div style={{ marginBottom: "9px" }}>
-              <label style={{ display: "block", fontSize: "11px", fontWeight: "500", color: "#A5ADC2", marginBottom: "5px" }}>
-                New Password
-              </label>
-              <div style={{ position: "relative" }}>
-                <input
-                  className="s-input"
-                  type={showPass ? "text" : "password"}
-                  placeholder="Min 6 characters"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  style={{ paddingRight: "44px" }}
-                />
-                <button type="button" className="eye-btn" onClick={() => setShowPass(!showPass)}
-                  style={{ position: "absolute", right: "6px", top: "50%", transform: "translateY(-50%)" }}
-                  aria-label={showPass ? "Hide password" : "Show password"}>
-                  <EyeIcon open={showPass} />
-                </button>
-              </div>
-            </div>
-
-            <div style={{ marginBottom: "14px" }}>
-              <label style={{ display: "block", fontSize: "11px", fontWeight: "500", color: "#A5ADC2", marginBottom: "5px" }}>
-                Confirm New Password
-              </label>
-              <div style={{ position: "relative" }}>
-                <input
-                  className="s-input"
-                  type={showConfirm ? "text" : "password"}
-                  placeholder="Re-enter new password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  required
-                  style={{ paddingRight: "44px" }}
-                />
-                <button type="button" className="eye-btn" onClick={() => setShowConfirm(!showConfirm)}
-                  style={{ position: "absolute", right: "6px", top: "50%", transform: "translateY(-50%)" }}
-                  aria-label={showConfirm ? "Hide password" : "Show password"}>
-                  <EyeIcon open={showConfirm} />
-                </button>
-              </div>
-            </div>
-
-            <button className="rp-btn" type="submit" disabled={loading}>
-              {loading ? "Resetting..." : "Reset Password"}
-            </button>
-          </form>
-        )}
-
-        <p style={{ textAlign: "center", fontSize: "12px", color: "#7B8499", marginTop: "14px", marginBottom: 0 }}>
-          <Link to="/login" style={{ color: "#7C6CF0", fontWeight: "600", textDecoration: "none" }}>
-            ← Back to login
-          </Link>
-        </p>
       </div>
     </div>
   );

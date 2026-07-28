@@ -1,13 +1,31 @@
-import { createContext, useState, useContext } from "react";
+import { createContext, useState, useContext, useEffect } from "react";
 import api from "../services/api";
 
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(() => {
-    const savedUser = localStorage.getItem("user");
-    return savedUser ? JSON.parse(savedUser) : null;
-  });
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true); // Tracks the initial storage sync
+
+  // Sync auth state on mount/refresh
+  useEffect(() => {
+    const initializeAuth = () => {
+      try {
+        const savedUser = localStorage.getItem("user");
+        if (savedUser) {
+          setUser(JSON.parse(savedUser));
+        }
+      } catch (error) {
+        console.error("Failed to parse user session storage:", error);
+        localStorage.removeItem("user");
+        localStorage.removeItem("token");
+      } finally {
+        setLoading(false); // Auth status verified, lift loading gates
+      }
+    };
+
+    initializeAuth();
+  }, []);
 
   const login = async (email, password) => {
     const res = await api.post("/auth/login", { email, password });
@@ -27,7 +45,8 @@ export const AuthProvider = ({ children }) => {
   const verifyOtp = async (email, otp) => {
     const res = await api.post("/auth/verify-otp", { email, otp });
     localStorage.removeItem("pendingEmail");
-    // Now fully log the user in
+    
+    // Process full authentication validation status
     const savedUser = JSON.parse(localStorage.getItem("user") || "null");
     if (savedUser) {
       savedUser.verified = true;
@@ -42,7 +61,7 @@ export const AuthProvider = ({ children }) => {
     return res.data;
   };
 
-const forgotPassword = async (email) => {
+  const forgotPassword = async (email) => {
     const res = await api.post("/auth/forgot-password", { email });
     return res.data;
   };
@@ -58,8 +77,20 @@ const forgotPassword = async (email) => {
     setUser(null);
   };
 
- return (
-    <AuthContext.Provider value={{ user, login, signup, logout, verifyOtp, resendOtp, forgotPassword, resetPassword }}>
+  return (
+    <AuthContext.Provider 
+      value={{ 
+        user, 
+        loading, 
+        login, 
+        signup, 
+        logout, 
+        verifyOtp, 
+        resendOtp, 
+        forgotPassword, 
+        resetPassword 
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

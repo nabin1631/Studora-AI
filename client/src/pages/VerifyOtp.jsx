@@ -87,25 +87,25 @@ function VerifyOtp() {
   };
 
   return (
-    <div style={{
-      height: "100dvh",
-      background: "#0B0F19",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      fontFamily: "sans-serif",
-      padding: "1rem",
-      overflow: "hidden",
-      boxSizing: "border-box",
-    }}>
+    <div
+      style={{
+        minHeight: "100vh",
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "space-between",
+        background:
+          "radial-gradient(circle at 10% 10%, #BFDBFE 0%, transparent 30%), radial-gradient(circle at 90% 20%, #DDD6FE 0%, transparent 30%), radial-gradient(circle at 50% 90%, #CFFAFE 0%, transparent 35%), #F8FAFC",
+        fontFamily: "sans-serif",
+      }}
+    >
       <style>{`
         .otp-input {
           width: 44px;
           height: 52px;
-          background: #0F1422;
-          border: 1.5px solid #2A3142;
+          background: #F8FAFC;
+          border: 1.5px solid #E2E8F0;
           border-radius: 10px;
-          color: #F1F3F9;
+          color: #0F172A;
           font-size: 20px;
           font-weight: 600;
           text-align: center;
@@ -137,100 +137,334 @@ function VerifyOtp() {
           background: none; border: none; cursor: pointer;
           color: #7C6CF0; font-size: 12px; font-weight: 600;
           padding: 0; text-decoration: none;
+          transition: color .2s;
         }
-        .resend-link:disabled { color: #5B6478; cursor: not-allowed; }
-        .glow { position: absolute; border-radius: 50%; filter: blur(80px); pointer-events: none; }
+        .resend-link:hover { color: #5B4FE0; }
+        .resend-link:disabled { color: #94A3B8; cursor: not-allowed; }
+        .footer-link {
+          color: #64748B;
+          text-decoration: none;
+          font-size: 13px;
+          transition: color .2s;
+        }
+        .footer-link:hover {
+          color: #2563EB;
+        }
+        @media (max-width:900px) {
+          .footer-grid {
+            grid-template-columns: repeat(2,1fr) !important;
+          }
+        }
+        @media (max-width:600px) {
+          .footer-grid {
+            grid-template-columns: 1fr !important;
+          }
+        }
       `}</style>
 
-      <div className="glow" style={{ width: 320, height: 320, background: "#7C6CF0", opacity: 0.12, top: "-80px", left: "-60px" }} />
-      <div className="glow" style={{ width: 260, height: 260, background: "#33C9E8", opacity: 0.1, bottom: "-60px", right: "-60px" }} />
-
-      <div   className="auth-card-content" style={{
-        position: "relative", zIndex: 10,
-        background: "#151B2B",
-        border: "1px solid #232B3D",
-        borderRadius: "18px",
-        padding: "1.7rem 1.9rem 1.5rem",
-        width: "100%", maxWidth: "380px",
-        maxHeight: "90dvh",
-        overflow: "hidden",
-        boxShadow: "0 20px 60px rgba(0,0,0,0.5)",
-        boxSizing: "border-box",
-      }}>
-
-        {/* Header */}
-        <div style={{ textAlign: "center", marginBottom: "1.2rem" }}>
-          <div style={{
-            width: 44, height: 44, borderRadius: "12px",
-            background: "linear-gradient(135deg, #7C6CF0, #33C9E8)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            margin: "0 auto 12px", fontSize: "20px",
-            boxShadow: "0 8px 24px rgba(124,108,240,0.35)",
-          }}>
-            ✉️
+      {/* Center Section */}
+      <div
+        style={{
+          flex: 1,
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          padding: "40px 20px",
+        }}
+      >
+        <div
+          style={{
+            width: "100%",
+            maxWidth: "400px",
+            background: "#FFFFFF",
+            borderRadius: "20px",
+            padding: "40px 32px",
+            boxShadow: "0 20px 60px rgba(0,0,0,0.08)",
+            border: "1px solid rgba(226,232,240,0.6)",
+          }}
+        >
+          {/* Header */}
+          <div style={{ textAlign: "center", marginBottom: "32px" }}>
+            <div
+              style={{
+                width: 56,
+                height: 56,
+                borderRadius: "16px",
+                background: "linear-gradient(135deg, #7C6CF0, #33C9E8)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                margin: "0 auto 16px",
+                fontSize: "24px",
+                boxShadow: "0 8px 24px rgba(124,108,240,0.25)",
+              }}
+            >
+              ✉️
+            </div>
+            <h1
+              style={{
+                fontSize: "22px",
+                fontWeight: "700",
+                color: "#0F172A",
+                margin: "0 0 8px",
+              }}
+            >
+              Verify your email
+            </h1>
+            <p
+              style={{
+                fontSize: "14px",
+                color: "#64748B",
+                margin: 0,
+                lineHeight: "1.6",
+              }}
+            >
+              We sent a 6-digit code to
+              <br />
+              <span style={{ color: "#0F172A", fontWeight: "600" }}>{email}</span>
+            </p>
           </div>
-          <h1 style={{ fontSize: "17px", fontWeight: "700", color: "#F1F3F9", margin: "0 0 6px" }}>
-            Verify your email
-          </h1>
-          <p style={{ fontSize: "12px", color: "#7B8499", margin: 0, lineHeight: "1.5" }}>
-            We sent a 6-digit code to<br />
-            <span style={{ color: "#A5ADC2", fontWeight: "500" }}>{email}</span>
+
+          {error && (
+            <div
+              style={{
+                background: "#FEF2F2",
+                border: "1px solid #FECACA",
+                color: "#DC2626",
+                padding: "10px 14px",
+                borderRadius: "10px",
+                fontSize: "13px",
+                marginBottom: "20px",
+                textAlign: "center",
+              }}
+            >
+              {error}
+            </div>
+          )}
+
+          {success && (
+            <div
+              style={{
+                background: "#F0FDF4",
+                border: "1px solid #BBF7D0",
+                color: "#16A34A",
+                padding: "10px 14px",
+                borderRadius: "10px",
+                fontSize: "13px",
+                marginBottom: "20px",
+                textAlign: "center",
+              }}
+            >
+              {success}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit}>
+            <div
+              style={{
+                display: "flex",
+                gap: "8px",
+                justifyContent: "center",
+                marginBottom: "24px",
+              }}
+              onPaste={handlePaste}
+            >
+              {digits.map((d, i) => (
+                <input
+                  key={i}
+                  ref={(el) => (inputRefs.current[i] = el)}
+                  className="otp-input"
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={1}
+                  value={d}
+                  onChange={(e) => handleChange(i, e.target.value)}
+                  onKeyDown={(e) => handleKeyDown(i, e)}
+                />
+              ))}
+            </div>
+
+            <button className="verify-btn" type="submit" disabled={loading}>
+              {loading ? "Verifying..." : "Verify Email"}
+            </button>
+          </form>
+
+          <p
+            style={{
+              textAlign: "center",
+              fontSize: "13px",
+              color: "#64748B",
+              marginTop: "20px",
+              marginBottom: 0,
+            }}
+          >
+            Didn't get the code?{" "}
+            <button
+              className="resend-link"
+              onClick={handleResend}
+              disabled={resending || cooldown > 0}
+            >
+              {cooldown > 0 ? `Resend in ${cooldown}s` : resending ? "Sending..." : "Resend code"}
+            </button>
           </p>
         </div>
-
-        {error && (
-          <div style={{
-            background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.25)",
-            color: "#FCA5A5", padding: "9px 13px", borderRadius: "9px",
-            fontSize: "12px", marginBottom: "14px", textAlign: "center",
-          }}>
-            {error}
-          </div>
-        )}
-
-        {success && (
-          <div style={{
-            background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.25)",
-            color: "#86EFAC", padding: "9px 13px", borderRadius: "9px",
-            fontSize: "12px", marginBottom: "14px", textAlign: "center",
-          }}>
-            {success}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit}>
-          <div style={{ display: "flex", gap: "8px", justifyContent: "center", marginBottom: "18px" }} onPaste={handlePaste}>
-            {digits.map((d, i) => (
-              <input
-                key={i}
-                ref={(el) => (inputRefs.current[i] = el)}
-                className="otp-input"
-                type="text"
-                inputMode="numeric"
-                maxLength={1}
-                value={d}
-                onChange={(e) => handleChange(i, e.target.value)}
-                onKeyDown={(e) => handleKeyDown(i, e)}
-              />
-            ))}
-          </div>
-
-          <button className="verify-btn" type="submit" disabled={loading}>
-            {loading ? "Verifying..." : "Verify Email"}
-          </button>
-        </form>
-
-        <p style={{ textAlign: "center", fontSize: "12px", color: "#7B8499", marginTop: "16px", marginBottom: 0 }}>
-          Didn't get the code?{" "}
-          <button
-            className="resend-link"
-            onClick={handleResend}
-            disabled={resending || cooldown > 0}
-          >
-            {cooldown > 0 ? `Resend in ${cooldown}s` : resending ? "Sending..." : "Resend code"}
-          </button>
-        </p>
       </div>
+
+      {/* Footer */}
+      <footer
+        style={{
+          width: "100%",
+          borderTop: "1px solid #E2E8F0",
+          background: "#fff",
+          padding: "48px 0",
+        }}
+      >
+        <div
+          style={{
+            maxWidth: "1200px",
+            margin: "0 auto",
+            padding: "0 24px",
+          }}
+        >
+          <div
+            className="footer-grid"
+            style={{
+              display: "grid",
+              gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr",
+              gap: "40px",
+            }}
+          >
+            {/* Brand */}
+            <div>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "10px",
+                  marginBottom: "12px",
+                }}
+              >
+                <img
+                  src="/logo.png"
+                  alt="Studora AI"
+                  style={{
+                    width: "32px",
+                    height: "32px",
+                    objectFit: "contain",
+                  }}
+                />
+                <span
+                  style={{
+                    fontSize: "18px",
+                    fontWeight: "700",
+                    color: "#0F172A",
+                  }}
+                >
+                  Studora AI
+                </span>
+              </div>
+              <p
+                style={{
+                  fontSize: "13px",
+                  color: "#64748B",
+                  lineHeight: "1.6",
+                  margin: 0,
+                }}
+              >
+                AI-powered learning platform helping students study smarter with Notes,
+                PDF AI, Quiz Arena, Flashcards and Planner.
+              </p>
+            </div>
+
+            {/* Product */}
+            <div>
+              <h4 style={{ color: "#0F172A", marginBottom: "12px", fontSize: "14px" }}>
+                Product
+              </h4>
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                <a href="#" className="footer-link">AI Notes</a>
+                <a href="#" className="footer-link">PDF AI</a>
+                <a href="#" className="footer-link">Quiz Arena</a>
+                <a href="#" className="footer-link">Planner</a>
+              </div>
+            </div>
+
+            {/* Company */}
+            <div>
+              <h4 style={{ color: "#0F172A", marginBottom: "12px", fontSize: "14px" }}>
+                Company
+              </h4>
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                <a href="#" className="footer-link">About</a>
+                <a href="#" className="footer-link">Blog</a>
+                <a href="#" className="footer-link">Careers</a>
+                <a href="#" className="footer-link">Contact</a>
+              </div>
+            </div>
+
+            {/* Resources */}
+            <div>
+              <h4 style={{ color: "#0F172A", marginBottom: "12px", fontSize: "14px" }}>
+                Resources
+              </h4>
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                <a href="#" className="footer-link">Documentation</a>
+                <a href="#" className="footer-link">FAQ</a>
+                <a href="#" className="footer-link">Community</a>
+                <a href="#" className="footer-link">Support</a>
+              </div>
+            </div>
+
+            {/* Legal */}
+            <div>
+              <h4 style={{ color: "#0F172A", marginBottom: "12px", fontSize: "14px" }}>
+                Legal
+              </h4>
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                <a href="#" className="footer-link">Privacy</a>
+                <a href="#" className="footer-link">Terms</a>
+                <a href="#" className="footer-link">Cookies</a>
+                <a href="#" className="footer-link">Security</a>
+              </div>
+            </div>
+          </div>
+
+          <div
+            style={{
+              borderTop: "1px solid #E2E8F0",
+              marginTop: "32px",
+              paddingTop: "24px",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              flexWrap: "wrap",
+              gap: "12px",
+            }}
+          >
+            <p
+              style={{
+                fontSize: "12px",
+                color: "#94A3B8",
+                margin: 0,
+              }}
+            >
+              © 2026 Studora AI. All rights reserved.
+            </p>
+
+            <div
+              style={{
+                display: "flex",
+                gap: "16px",
+              }}
+            >
+              <a href="#" className="footer-link">GitHub</a>
+              <a href="#" className="footer-link">LinkedIn</a>
+              <a href="#" className="footer-link">Discord</a>
+              <a href="#" className="footer-link">X</a>
+            </div>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

@@ -1,17 +1,13 @@
 const mongoose = require("mongoose");
 
-
 const UserSchema = new mongoose.Schema(
-
 {
-
     name:
     {
         type:String,
         required:true,
         trim:true
     },
-
 
     email:
     {
@@ -22,7 +18,6 @@ const UserSchema = new mongoose.Schema(
         trim:true
     },
 
-
     password:
     {
         type:String,
@@ -30,13 +25,11 @@ const UserSchema = new mongoose.Schema(
         minlength:8
     },
 
-
     verified:
     {
         type:Boolean,
         default:false
     },
-
 
     otp:
     {
@@ -45,10 +38,10 @@ const UserSchema = new mongoose.Schema(
     },
      
     otpAttempts:
-{
-    type:Number,
-    default:0
-},
+    {
+        type:Number,
+        default:0
+    },
 
     otpExpire:
     {
@@ -56,13 +49,11 @@ const UserSchema = new mongoose.Schema(
         default:null
     },
 
-
     avatar:
     {
         type:String,
         default:""
     },
-
 
     role:
     {
@@ -70,30 +61,67 @@ const UserSchema = new mongoose.Schema(
         default:"user"
     },
 
+    resetToken:
+    {
+        type:String,
+        default:null
+    },
 
-resetToken:
-{
-    type:String,
-    default:null
-},
-
-
-resetTokenExpire:
-{
-    type:Date,
-    default:null
-},
+    resetTokenExpire:
+    {
+        type:Date,
+        default:null
+    },
 
     createdAt:
     {
         type:Date,
         default:Date.now
+    },
+
+    points:
+    {
+        type: Number,
+        default: 0
+    },
+
+    level:
+    {
+        type: Number,
+        default: 1
+    },
+
+    streak:
+    {
+        type: Number,
+        default: 0
+    },
+
+    lastQuizDate:
+    {
+        type: Date,
+        default: null
+    },
+
+    badges:
+    {
+        type: [String],
+        default: []
+    },
+
+    totalQuizzes:
+    {
+        type: Number,
+        default: 0
+    },
+
+    totalCorrect:
+    {
+        type: Number,
+        default: 0
     }
-
 }
-
 );
-
 
 module.exports = mongoose.model(
     "User",
