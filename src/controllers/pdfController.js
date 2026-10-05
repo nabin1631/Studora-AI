@@ -151,7 +151,7 @@ const askPdf = async (req, res) => {
 
         // Call Groq
         const completion = await groq.chat.completions.create({
-            model: "llama-3.3-70b-versatile",
+            model: "openai/gpt-oss-120b",
             messages: [
                 {
                     role: "system",
@@ -265,7 +265,7 @@ const summarizePdf = async (req, res) => {
         }
 
         const completion = await groq.chat.completions.create({
-            model: "llama-3.3-70b-versatile",
+            model: "openai/gpt-oss-120b",
             messages: [
                 {
                     role: "system",

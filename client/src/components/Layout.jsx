@@ -1,11 +1,11 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import { useGuest } from "../context/GuestContext";
 import NotificationPanel from "./NotificationPanel";
 
-// SVG Icon Definitions matching the sleek lavender badge design
+// SVG Icon Definitions
 const Icons = {
   Dashboard: (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
@@ -70,6 +70,26 @@ const Icons = {
       <polyline points="9 18 15 12 9 6" />
     </svg>
   ),
+  Search: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="11" cy="11" r="8" />
+      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+    </svg>
+  ),
+  Menu: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="3" y1="12" x2="21" y2="12" />
+      <line x1="3" y1="6" x2="21" y2="6" />
+      <line x1="3" y1="18" x2="21" y2="18" />
+    </svg>
+  ),
+  Logout: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+      <polyline points="16 17 21 12 16 7" />
+      <line x1="21" y1="12" x2="9" y2="12" />
+    </svg>
+  ),
 };
 
 const NAV_ITEMS = [
@@ -86,7 +106,7 @@ const NAV_ITEMS = [
 function Layout({ children, isGuest = false }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
-  const { logout, user } = useAuth(); // Logged-in user context
+  const { logout, user } = useAuth();
   const { colors: c } = useTheme();
   const navigate = useNavigate();
   const { promptAuth } = useGuest();
@@ -98,394 +118,586 @@ function Layout({ children, isGuest = false }) {
 
   const getNavItemsByCategory = (cat) => NAV_ITEMS.filter((item) => item.category === cat);
 
-  // Dynamic user details calculation
   const userName = user?.name || user?.username || "Nabin Basyal";
   const userInitial = userName ? userName.charAt(0).toUpperCase() : "N";
 
+  const themeStyles = {
+    "--sidebar-w": "300px",
+    "--navbar-h": "60px",
+    "--theme-bg": c.bg || "#F7F8FC",
+    "--theme-card-bg": c.bgCard || "#FFFFFF",
+    "--theme-secondary-bg": c.bgSecondary || "#FAF9FE",
+    "--theme-border": c.border || "#E8EAF3",
+    "--theme-border-subtle": c.borderSubtle || "#F1F3F9",
+    "--theme-text-primary": c.text || "#111827",
+    "--theme-text-secondary": c.textSecondary || "#6B7280",
+    "--theme-text-faint": c.textFaint || "#9CA3AF",
+    "--theme-accent": c.accent || "#6E3AFF",
+  };
+
   const renderNavGroup = (category, isMobileView) => (
-    <div key={category}>
+    <div key={category} style={{ marginBottom: "16px" }}>
       <div className="nav-category-header">{category}</div>
-      {getNavItemsByCategory(category).map((item) => {
-        if (isGuest) {
+      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+        {getNavItemsByCategory(category).map((item) => {
+          if (isGuest) {
+            return (
+              <div
+                key={item.to}
+                onClick={() => {
+                  promptAuth();
+                  if (isMobileView) setSidebarOpen(false);
+                }}
+                className="nav-card-item"
+                role="button"
+                tabIndex={0}
+              >
+                <div className="nav-icon-badge">{item.icon}</div>
+                <div className="nav-text-container">
+                  <span className="nav-title-text">{item.label}</span>
+                  <span className="nav-sub-text">{item.sub}</span>
+                </div>
+                <span className="guest-lock-icon">🔒</span>
+              </div>
+            );
+          }
+
           return (
-            <div
+            <NavLink
               key={item.to}
-              onClick={() => {
-                promptAuth();
-                if (isMobileView) setSidebarOpen(false);
-              }}
-              className="nav-card-item"
+              to={item.to}
+              onClick={() => isMobileView && setSidebarOpen(false)}
+              className={({ isActive }) => `nav-card-item ${isActive ? "active" : ""}`}
             >
               <div className="nav-icon-badge">{item.icon}</div>
               <div className="nav-text-container">
                 <span className="nav-title-text">{item.label}</span>
                 <span className="nav-sub-text">{item.sub}</span>
               </div>
-              <span className="guest-lock-icon">🔒</span>
-            </div>
+              <span className="active-chevron">{Icons.ChevronRight}</span>
+            </NavLink>
           );
-        }
-
-        return (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            onClick={() => isMobileView && setSidebarOpen(false)}
-            className={({ isActive }) => `nav-card-item ${isActive ? "active" : ""}`}
-          >
-            <div className="nav-icon-badge">{item.icon}</div>
-            <div className="nav-text-container">
-              <span className="nav-title-text">{item.label}</span>
-              <span className="nav-sub-text">{item.sub}</span>
-            </div>
-            <span className="active-chevron">{Icons.ChevronRight}</span>
-          </NavLink>
-        );
-      })}
+        })}
+      </div>
     </div>
   );
 
   return (
-    <div style={{ height: "100dvh", width: "100%", display: "flex", background: c.bg, overflow: "hidden", boxSizing: "border-box" }}>
+    <div className="app-layout-root" style={themeStyles}>
       <style>{`
-        :root {
-          --sidebar-w: 280px;
-          --purple-accent: ${c.accent || "#6E3AFF"};
-          --purple-soft-bg: ${c.accent ? c.accent + "1F" : "#F3EAFE"};
-          --text-dark: ${c.text || "#0F172A"};
-          --text-sub: ${c.textSecondary || "#64748B"};
+        * {
+          box-sizing: border-box;
         }
 
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes iconPop { 0% { transform: scale(1); } 50% { transform: scale(0.85); } 100% { transform: scale(1); } }
+        body, html {
+          margin: 0;
+          padding: 0;
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+          background-color: var(--theme-bg);
+          color: var(--theme-text-primary);
+          -webkit-font-smoothing: antialiased;
+        }
 
-        /* Top Bar Styling */
-        .icon-btn {
-          background: ${c.bgCard}; border: 1px solid ${c.border}; cursor: pointer; color: ${c.textSecondary};
-          display: flex; align-items: center; justify-content: center;
-          width: 40px; height: 40px; border-radius: 10px; transition: all .18s cubic-bezier(.4,0,.2,1);
-          flex-shrink: 0; font-size: 17px;
+        .app-layout-root {
+          height: 100dvh;
+          width: 100vw;
+          display: flex;
+          background: var(--theme-bg);
+          overflow: hidden;
+          position: relative;
         }
-        .icon-btn:hover {
-          background: ${c.accent}1A; border-color: ${c.accent}55; color: ${c.accent};
-          transform: translateY(-2px); box-shadow: 0 4px 12px ${c.accent}26;
+
+        .hide-scrollbar {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
         }
-        .icon-btn:active { animation: iconPop .25s ease; transform: translateY(0); }
+        .hide-scrollbar::-webkit-scrollbar {
+          display: none;
+        }
+
+        /* PREMIUM STICKY NAVBAR (60px) */
+        .navbar-header {
+          height: var(--navbar-h);
+          flex-shrink: 0;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 0 24px;
+          gap: 16px;
+          background: var(--theme-card-bg);
+          border-bottom: 1px solid var(--theme-border);
+          position: sticky;
+          top: 0;
+          z-index: 40;
+          backdrop-filter: blur(12px);
+          -webkit-backdrop-filter: blur(12px);
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+          transition: all 200ms ease;
+        }
+
+        /* SEARCH BAR (42px HEIGHT) */
+        .top-search-wrapper {
+          position: relative;
+          flex: 1;
+          max-width: 360px;
+          display: flex;
+          align-items: center;
+        }
+
+        .top-search-icon {
+          position: absolute;
+          left: 14px;
+          color: var(--theme-text-secondary);
+          pointer-events: none;
+          display: flex;
+          align-items: center;
+        }
 
         .top-search {
-          background: ${c.bgCard}; border: 1px solid ${c.border}; border-radius: 10px;
-          padding: 9px 14px 9px 38px; color: ${c.text}; font-size: 13px;
-          outline: none; width: 100%; max-width: 320px; transition: all .18s; box-sizing: border-box;
-        }
-        .top-search::placeholder { color: ${c.textFaint}; }
-        .top-search:focus { border-color: ${c.accent}; box-shadow: 0 0 0 3px ${c.accent}1F; }
-        .navbar-header { background: ${c.bgSecondary}; }
-
-        /* Header Guest Buttons Hover Effects */
-        .auth-btn-login {
-          padding: 8px 16px;
-          background: ${c.bgCard};
-          border: 1px solid ${c.border};
+          background: var(--theme-bg);
+          border: 1px solid var(--theme-border);
           border-radius: 10px;
-          color: ${c.text};
-          font-size: 13px;
-          font-weight: 600;
-          cursor: pointer;
-          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        .auth-btn-login:hover {
-          background: ${c.bgCardHover || c.borderSubtle};
-          border-color: ${c.accent};
-          color: ${c.accent};
-          transform: translateY(-2px);
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-        }
-        .auth-btn-login:active {
-          transform: translateY(0);
+          height: 42px;
+          padding: 0 14px 0 38px;
+          color: var(--theme-text-primary);
+          font-size: 13.5px;
+          font-weight: 500;
+          outline: none;
+          width: 100%;
+          transition: all 200ms ease-out;
         }
 
-        .auth-btn-signup {
-          padding: 8px 18px;
-          background: linear-gradient(135deg, ${c.accent || "#6E3AFF"}, #5B4FE0);
+        .top-search::placeholder {
+          color: var(--theme-text-faint);
+          font-weight: 400;
+        }
+
+        .top-search:focus {
+          background: var(--theme-card-bg);
+          border-color: var(--theme-accent);
+          box-shadow: 0 0 0 3px rgba(110, 58, 255, 0.12);
+        }
+
+        .icon-btn {
+          background: var(--theme-card-bg);
+          border: 1px solid var(--theme-border);
+          cursor: pointer;
+          color: var(--theme-text-secondary);
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 38px;
+          height: 38px;
+          border-radius: 10px;
+          transition: all 200ms ease;
+          flex-shrink: 0;
+        }
+
+        .icon-btn:hover {
+          background: var(--theme-bg);
+          border-color: var(--theme-accent);
+          color: var(--theme-accent);
+        }
+
+        .btn-primary {
+          background: var(--theme-accent);
+          color: #FFFFFF;
           border: none;
           border-radius: 10px;
-          color: #ffffff;
-          font-size: 13px;
+          padding: 0 16px;
+          height: 38px;
+          font-size: 13.5px;
           font-weight: 600;
           cursor: pointer;
-          box-shadow: 0 2px 8px ${c.accent ? c.accent + "33" : "rgba(110, 58, 255, 0.2)"};
-          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        .auth-btn-signup:hover {
-          background: linear-gradient(135deg, #7C4DFF, #4D3FE0);
-          transform: translateY(-2px);
-          box-shadow: 0 6px 18px ${c.accent ? c.accent + "55" : "rgba(110, 58, 255, 0.35)"};
-        }
-        .auth-btn-signup:active {
-          transform: translateY(0);
+          box-shadow: 0 4px 12px rgba(110, 58, 255, 0.2);
+          transition: all 200ms ease;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
         }
 
-        /* Sidebar Styling */
+        .btn-primary:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 6px 16px rgba(110, 58, 255, 0.3);
+        }
+
+        .btn-secondary {
+          background: var(--theme-card-bg);
+          color: var(--theme-text-primary);
+          border: 1px solid var(--theme-border);
+          border-radius: 10px;
+          padding: 0 16px;
+          height: 38px;
+          font-size: 13.5px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 200ms ease;
+        }
+
+        .btn-secondary:hover {
+          background: var(--theme-bg);
+        }
+
+        /* LOGO STYLING - UNWRAPPED & ENLARGED */
+        .brand-logo-img {
+          height: 36px;
+          width: auto;
+          object-fit: contain;
+          display: block;
+        }
+
+        /* SIDEBAR DESKTOP */
         .sidebar-fixed {
-          width: var(--sidebar-w); flex-shrink: 0;
-          background: ${c.bgSecondary || c.bgCard};
-          border-right: 1px solid ${c.borderSubtle || c.border}; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.06);
-          border-radius: 0 24px 24px 0; display: flex; flex-direction: column;
-          transition: margin-left 250ms ease; z-index: 10;
+          width: var(--sidebar-w);
+          flex-shrink: 0;
+          background: var(--theme-card-bg);
+          border-right: 1px solid var(--theme-border);
+          display: flex;
+          flex-direction: column;
+          z-index: 30;
+          transition: background 200ms ease, border-color 200ms ease;
         }
 
-        .sidebar-mobile {
-          position: fixed; top: 0; left: 0; bottom: 0; width: 88vw; max-width: 300px;
-          background: ${c.bgSecondary || c.bgCard}; border-right: 1px solid ${c.borderSubtle || c.border};
-          box-shadow: 0 12px 40px rgba(0,0,0,0.15); border-radius: 0 24px 24px 0; z-index: 50;
-          display: flex; flex-direction: column; transition: transform 300ms ease;
+        .sidebar-header-area {
+          padding: 18px 24px 14px 24px;
+          flex-shrink: 0;
         }
 
-        .sidebar-header-area { padding: 24px 20px 16px 20px; flex-shrink: 0; }
         .sidebar-scroll-area {
-          flex: 1; overflow-y: auto; overflow-x: hidden;
-          -ms-overflow-style: none; scrollbar-width: none;
-          padding: 0 16px 20px 16px; scroll-behavior: smooth;
+          flex: 1;
+          overflow-y: auto;
+          overflow-x: hidden;
+          padding: 8px 16px 24px 16px;
         }
-        .sidebar-scroll-area::-webkit-scrollbar { display: none; }
 
-        /* Categories */
         .nav-category-header {
-          text-transform: uppercase; font-size: 11px; color: ${c.textFaint || "#94A3B8"};
-          letter-spacing: 0.08em; font-weight: 700; margin: 20px 0 10px 12px;
+          text-transform: uppercase;
+          font-size: 11px;
+          color: var(--theme-text-faint);
+          letter-spacing: 0.08em;
+          font-weight: 700;
+          padding: 12px 12px 8px 12px;
         }
 
-        /* Nav Item Cards */
         .nav-card-item {
-          display: flex; align-items: center; gap: 14px; height: 60px; padding: 0 14px;
-          border-radius: 16px; text-decoration: none; position: relative;
-          transition: all 220ms ease; cursor: pointer; margin-bottom: 4px;
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 8px 12px;
+          border-radius: 12px;
+          text-decoration: none;
+          position: relative;
+          transition: all 200ms cubic-bezier(0.16, 1, 0.3, 1);
+          cursor: pointer;
+          background: transparent;
         }
+
         .nav-card-item:hover {
-          background: ${c.bgCardHover || c.bgCard}; transform: translateX(4px);
+          background: var(--theme-bg);
+          transform: translateX(2px);
         }
 
         .nav-icon-badge {
-          width: 42px; height: 42px; border-radius: 14px;
-          background: var(--purple-soft-bg); color: var(--purple-accent);
-          display: flex; align-items: center; justify-content: center;
-          flex-shrink: 0; transition: transform 220ms ease;
+          width: 38px;
+          height: 38px;
+          border-radius: 10px;
+          background: rgba(110, 58, 255, 0.12);
+          color: var(--theme-accent);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+          transition: all 200ms ease;
         }
-        .nav-card-item:hover .nav-icon-badge { transform: scale(1.05); }
 
         .nav-text-container {
-          display: flex; flex-direction: column; flex: 1; min-width: 0;
+          display: flex;
+          flex-direction: column;
+          flex: 1;
+          min-width: 0;
         }
-        
-        /* DYNAMIC THEMED TITLES */
+
         .nav-title-text {
-          color: var(--text-dark) !important;
-          font-size: 14px; font-weight: 700; line-height: 1.25;
-          letter-spacing: -0.01em;
+          color: var(--theme-text-primary);
+          font-size: 13.5px;
+          font-weight: 600;
+          line-height: 1.25;
         }
+
         .nav-sub-text {
-          color: var(--text-sub); font-size: 12px; font-weight: 500; margin-top: 2px;
+          color: var(--theme-text-secondary);
+          font-size: 11.5px;
+          font-weight: 500;
+          margin-top: 1px;
         }
 
         .active-chevron {
-          color: var(--purple-accent); opacity: 0; transform: translateX(-4px); transition: all 220ms ease;
+          color: var(--theme-accent);
+          opacity: 0;
+          transform: translateX(-4px);
+          transition: all 200ms ease;
         }
-        .guest-lock-icon { font-size: 11px; color: ${c.textFaint || "#94A3B8"}; }
 
-        /* ACTIVE CARD STYLING */
+        .guest-lock-icon {
+          font-size: 12px;
+          color: var(--theme-text-faint);
+        }
+
         .nav-card-item.active {
-          background: linear-gradient(90deg, ${c.accent ? c.accent + "17" : "rgba(110, 58, 255, 0.09)"} 0%, ${c.accent ? c.accent + "05" : "rgba(110, 58, 255, 0.02)"} 100%);
+          background: rgba(110, 58, 255, 0.1);
         }
+
         .nav-card-item.active .nav-icon-badge {
-          background: var(--purple-accent); color: #FFFFFF;
-          box-shadow: 0 6px 16px ${c.accent ? c.accent + "40" : "rgba(110, 58, 255, 0.25)"};
-        }
-        .nav-card-item.active .active-chevron { opacity: 1; transform: translateX(0); }
-        .nav-card-item.active::before {
-          content: ''; position: absolute; left: 0; top: 12px; bottom: 12px;
-          width: 4px; background: var(--purple-accent); border-radius: 0 4px 4px 0;
+          background: var(--theme-accent);
+          color: #FFFFFF;
+          box-shadow: 0 4px 12px rgba(110, 58, 255, 0.3);
         }
 
-        /* Upgrade Card */
+        .nav-card-item.active .nav-title-text {
+          color: var(--theme-accent);
+          font-weight: 700;
+        }
+
+        .nav-card-item.active .active-chevron {
+          opacity: 1;
+          transform: translateX(0);
+        }
+
         .upgrade-card-box {
-          background: linear-gradient(135deg, #1E1E2E 0%, #0F0F1A 100%);
-          border-radius: 18px; padding: 18px; margin-top: 28px;
-          box-shadow: 0 10px 24px rgba(0,0,0,0.08); position: relative; overflow: hidden;
+          background: linear-gradient(135deg, #181822 0%, #11111A 100%);
+          border-radius: 16px;
+          padding: 18px;
+          margin-top: 16px;
+          position: relative;
+          overflow: hidden;
+          border: 1px solid rgba(255, 255, 255, 0.1);
         }
+
         .coming-soon-pill {
-          position: absolute; top: 0; right: 0;
-          background: linear-gradient(90deg, #FF6B6B, #FF8E53); color: #FFF;
-          font-size: 9px; font-weight: 800; text-transform: uppercase;
-          padding: 4px 10px; border-bottom-left-radius: 12px; letter-spacing: 0.5px;
+          position: absolute;
+          top: 0;
+          right: 0;
+          background: linear-gradient(90deg, #FF6B6B, #FF8E53);
+          color: #FFFFFF;
+          font-size: 9px;
+          font-weight: 800;
+          text-transform: uppercase;
+          padding: 4px 10px;
+          border-bottom-left-radius: 12px;
+          letter-spacing: 0.5px;
         }
 
-        /* Profile Card */
         .profile-card-box {
-          display: flex; align-items: center; gap: 12px; padding: 12px 14px;
-          border-radius: 18px; margin-top: 14px; background: ${c.bgCard};
-          border: 1px solid ${c.border}; transition: background 220ms ease;
-        }
-        .profile-card-box:hover { background: ${c.bgCardHover || c.bgCard}; }
-        .profile-avatar-circle {
-          width: 40px; height: 40px; border-radius: 50%;
-          background: linear-gradient(135deg, #6366F1, #8B5CF6);
-          color: #FFF; display: flex; align-items: center; justify-content: center;
-          font-weight: 700; font-size: 16px; flex-shrink: 0;
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 10px 12px;
+          border-radius: 14px;
+          margin-top: 16px;
+          background: var(--theme-bg);
+          border: 1px solid var(--theme-border);
+          transition: all 200ms ease;
+          cursor: pointer;
         }
 
-        @media (min-width: 701px) {
-          .mobile-search-icon, .mobile-search-bar, .sidebar-mobile, .drawer-overlay { display: none !important; }
+        .profile-card-box:hover {
+          border-color: var(--theme-accent);
         }
-        @media (max-width: 700px) {
-          .desktop-search-bar, .sidebar-fixed, .desktop-only-logout { display: none !important; }
+
+        .profile-avatar-circle {
+          width: 38px;
+          height: 38px;
+          border-radius: 50%;
+          background: linear-gradient(135deg, var(--theme-accent), #8B5CF6);
+          color: #FFFFFF;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: 700;
+          font-size: 15px;
+          flex-shrink: 0;
+        }
+
+        .sidebar-mobile {
+          position: fixed;
+          top: 0;
+          left: 0;
+          bottom: 0;
+          width: 85vw;
+          max-width: 320px;
+          background: var(--theme-card-bg);
+          box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+          z-index: 60;
+          display: flex;
+          flex-direction: column;
+          transition: transform 300ms cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .drawer-overlay {
+          position: fixed;
+          inset: 0;
+          background: rgba(0, 0, 0, 0.5);
+          backdrop-filter: blur(4px);
+          z-index: 50;
+        }
+
+        @media (min-width: 992px) {
+          .mobile-only { display: none !important; }
+          .sidebar-fixed { margin-left: 0 !important; }
+        }
+
+        @media (max-width: 991px) {
+          .desktop-only { display: none !important; }
+          .sidebar-fixed { display: none !important; }
+          .brand-logo-img { height: 32px; }
         }
       `}</style>
 
       {/* DESKTOP SIDEBAR */}
-      <aside className="sidebar-fixed" style={{ marginLeft: sidebarOpen ? "0" : "calc(-1 * var(--sidebar-w))" }}>
-        {/* Fixed Header */}
+      <aside className="sidebar-fixed desktop-only">
         <div className="sidebar-header-area">
-          <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
-            <img src="/logo.png" alt="Studora AI" style={{ width: "36px", height: "36px", objectFit: "contain", flexShrink: 0 }} />
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <img src="/logo.png" alt="Studora AI" className="brand-logo-img" />
             <div style={{ display: "flex", flexDirection: "column" }}>
-              <span style={{ color: c.text, fontWeight: "800", fontSize: "18px", letterSpacing: "-0.02em" }}>STUDORA AI</span>
-              <span style={{ color: c.textSecondary, fontSize: "12px", fontWeight: "500" }}>AI Learning Workspace</span>
+              <span style={{ color: "var(--theme-text-primary)", fontWeight: "800", fontSize: "17px", letterSpacing: "-0.02em" }}>STUDORA AI</span>
+              <span style={{ color: "var(--theme-text-secondary)", fontSize: "11px", fontWeight: "500" }}>AI Learning Workspace</span>
             </div>
           </div>
-          <div style={{ height: "1px", background: c.borderSubtle || c.border, marginTop: "20px" }} />
+          <div style={{ height: "1px", background: "var(--theme-border)", marginTop: "16px" }} />
         </div>
 
-        {/* Scrollable Navigation */}
-        <nav className="sidebar-scroll-area">
+        <nav className="sidebar-scroll-area hide-scrollbar">
           {["WORKSPACE", "PRODUCTIVITY", "ACCOUNT"].map((cat) => renderNavGroup(cat, false))}
 
-          {/* Upgrade Card */}
           <div className="upgrade-card-box">
-            <div className="coming-soon-pill">Coming Soon</div>
-            <h4 style={{ color: "#FFF", margin: "0 0 4px 0", fontSize: "15px", fontWeight: "700" }}>Upgrade to Pro ✨</h4>
-            <p style={{ color: "rgba(255,255,255,0.7)", margin: 0, fontSize: "12px" }}>Unlock advanced AI features and more.</p>
+            <div className="coming-soon-pill">COMING SOON</div>
+            <h4 style={{ color: "#FFFFFF", margin: "0 0 4px 0", fontSize: "15px", fontWeight: "700" }}>Upgrade to Pro ✨</h4>
+            <p style={{ color: "rgba(255, 255, 255, 0.7)", margin: 0, fontSize: "12px", lineHeight: "1.4" }}>Unlock advanced AI features & unlimited uploads.</p>
           </div>
 
-          {/* User Profile Card */}
           {!isGuest && (
             <div className="profile-card-box">
               <div className="profile-avatar-circle">{userInitial}</div>
               <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
-                <span style={{ color: c.text, fontSize: "14px", fontWeight: "700", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                <span style={{ color: "var(--theme-text-primary)", fontSize: "13.5px", fontWeight: "700", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                   {userName}
                 </span>
-                <span style={{ color: c.accent || "#6E3AFF", fontSize: "12px", fontWeight: "600" }}>Free Plan</span>
+                <span style={{ color: "var(--theme-accent)", fontSize: "11px", fontWeight: "600" }}>Free Plan</span>
               </div>
-              <span style={{ color: c.textFaint }}>{Icons.ChevronRight}</span>
+              <span style={{ color: "var(--theme-text-secondary)" }}>{Icons.ChevronRight}</span>
             </div>
           )}
 
-          <div style={{ marginTop: "24px", textAlign: "center", fontSize: "11px", color: c.textFaint, fontWeight: "500" }}>
+          <div style={{ marginTop: "24px", textAlign: "center", fontSize: "11px", color: "var(--theme-text-faint)", fontWeight: "500" }}>
             © 2026 STUDORA AI • v1.0
           </div>
         </nav>
       </aside>
 
-      {/* MOBILE SIDEBAR & DRAWER */}
-      {sidebarOpen && <div className="drawer-overlay" onClick={() => setSidebarOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 40 }} />}
-
-      <aside className="sidebar-mobile" style={{ transform: sidebarOpen ? "translateX(0)" : "translateX(-100%)" }}>
-        <div className="sidebar-header-area" style={{ padding: "18px 16px 12px 16px" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-              <img src="/logo.png" alt="Studora AI" style={{ width: "32px", height: "32px", objectFit: "contain", flexShrink: 0 }} />
-              <div style={{ display: "flex", flexDirection: "column" }}>
-                <span style={{ color: c.text, fontWeight: "800", fontSize: "16px" }}>STUDORA AI</span>
-                <span style={{ color: c.textSecondary, fontSize: "11px" }}>AI Learning Workspace</span>
+      {/* MOBILE DRAWER SIDEBAR */}
+      <div className="mobile-only">
+        {sidebarOpen && <div className="drawer-overlay" onClick={() => setSidebarOpen(false)} />}
+        <aside className="sidebar-mobile" style={{ transform: sidebarOpen ? "translateX(0)" : "translateX(-100%)" }}>
+          <div className="sidebar-header-area" style={{ padding: "16px 20px" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <img src="/logo.png" alt="Studora AI" className="brand-logo-img" />
+                <div style={{ display: "flex", flexDirection: "column" }}>
+                  <span style={{ color: "var(--theme-text-primary)", fontWeight: "800", fontSize: "15px" }}>STUDORA AI</span>
+                  <span style={{ color: "var(--theme-text-secondary)", fontSize: "11px" }}>AI Learning Workspace</span>
+                </div>
               </div>
+              <button className="icon-btn" onClick={() => setSidebarOpen(false)} style={{ width: "34px", height: "34px" }}>✕</button>
             </div>
-            <button className="icon-btn" onClick={() => setSidebarOpen(false)} style={{ width: "36px", height: "36px" }}>✕</button>
-          </div>
-        </div>
-
-        <nav className="sidebar-scroll-area">
-          {["WORKSPACE", "PRODUCTIVITY", "ACCOUNT"].map((cat) => renderNavGroup(cat, true))}
-
-          <div className="upgrade-card-box" style={{ marginTop: "20px" }}>
-            <div className="coming-soon-pill">Coming Soon</div>
-            <h4 style={{ color: "#FFF", margin: "0 0 4px 0", fontSize: "14px", fontWeight: "700" }}>Upgrade to Pro ✨</h4>
-            <p style={{ color: "rgba(255,255,255,0.7)", margin: 0, fontSize: "11px" }}>Unlock advanced AI features.</p>
           </div>
 
-          {!isGuest && (
-            <div className="profile-card-box">
-              <div className="profile-avatar-circle">{userInitial}</div>
-              <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
-                <span style={{ color: c.text, fontSize: "13px", fontWeight: "700" }}>{userName}</span>
-                <span style={{ color: c.accent || "#6E3AFF", fontSize: "11px", fontWeight: "600" }}>Free Plan</span>
+          <nav className="sidebar-scroll-area hide-scrollbar">
+            {["WORKSPACE", "PRODUCTIVITY", "ACCOUNT"].map((cat) => renderNavGroup(cat, true))}
+
+            <div className="upgrade-card-box">
+              <div className="coming-soon-pill">COMING SOON</div>
+              <h4 style={{ color: "#FFFFFF", margin: "0 0 4px 0", fontSize: "14px", fontWeight: "700" }}>Upgrade to Pro ✨</h4>
+              <p style={{ color: "rgba(255, 255, 255, 0.7)", margin: 0, fontSize: "11.5px" }}>Unlock advanced AI features.</p>
+            </div>
+
+            {!isGuest && (
+              <div className="profile-card-box">
+                <div className="profile-avatar-circle">{userInitial}</div>
+                <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
+                  <span style={{ color: "var(--theme-text-primary)", fontSize: "13.5px", fontWeight: "700" }}>{userName}</span>
+                  <span style={{ color: "var(--theme-accent)", fontSize: "11px", fontWeight: "600" }}>Free Plan</span>
+                </div>
               </div>
+            )}
+
+            {!isGuest && (
+              <button onClick={handleLogout} style={{
+                display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
+                padding: "10px", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)",
+                borderRadius: "12px", color: "#EF4444", fontSize: "13px", fontWeight: "600", cursor: "pointer",
+                marginTop: "16px", width: "100%"
+              }}>
+                {Icons.Logout} Logout
+              </button>
+            )}
+
+            <div style={{ marginTop: "16px", textAlign: "center", fontSize: "11px", color: "var(--theme-text-faint)" }}>
+              © 2026 STUDORA AI • v1.0
             </div>
-          )}
+          </nav>
+        </aside>
+      </div>
 
-          {!isGuest && (
-            <button onClick={handleLogout} style={{
-              display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
-              padding: "12px", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.15)",
-              borderRadius: "14px", color: "#EF4444", fontSize: "13px", fontWeight: "600", cursor: "pointer",
-              marginTop: "20px", width: "100%"
-            }}>
-              ⏻ Logout
-            </button>
-          )}
-
-          <div style={{ marginTop: "20px", textAlign: "center", fontSize: "11px", color: c.textFaint }}>
-            © 2026 STUDORA AI • v1.0
-          </div>
-        </nav>
-      </aside>
-
-      {/* Main Column */}
+      {/* MAIN CONTENT AREA */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, overflow: "hidden" }}>
-        {/* Top Navbar */}
-        <header className="navbar-header" style={{
-          height: "60px", flexShrink: 0, display: "flex", alignItems: "center",
-          justify: "space-between", padding: "0 18px", gap: "10px",
-          borderBottom: `1px solid ${c.borderSubtle}`,
-        }}>
+        {/* PREMIUM STICKY HEADER NAV (60px) */}
+        <header className="navbar-header">
           {!mobileSearchOpen ? (
             <>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0, flex: 1 }}>
-                <button className="icon-btn" onClick={() => setSidebarOpen(!sidebarOpen)} title="Menu">☰</button>
-                <img src="/logo.png" alt="Studora AI" style={{ width: "44px", height: "44px", objectFit: "contain", flexShrink: 0, margin: "0 10px 0 6px" }} />
+              <div style={{ display: "flex", alignItems: "center", gap: "12px", flex: 1, minWidth: 0 }}>
+                <button className="icon-btn mobile-only" onClick={() => setSidebarOpen(!sidebarOpen)} title="Menu">
+                  {Icons.Menu}
+                </button>
+                <img src="/logo.png" alt="Studora AI" className="brand-logo-img mobile-only" />
 
-                <div className="desktop-search-bar" style={{ position: "relative", flex: 1, maxWidth: "320px" }}>
-                  <span style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", fontSize: "13px", color: c.textFaint, pointerEvents: "none" }}>🔍</span>
-                  <input className="top-search" placeholder="Search everything..." />
+                <div className="top-search-wrapper desktop-only">
+                  <span className="top-search-icon">{Icons.Search}</span>
+                  <input className="top-search" placeholder="Search lessons, notes, tutors..." />
                 </div>
               </div>
 
               <div style={{ display: "flex", alignItems: "center", gap: "10px", flexShrink: 0 }}>
-                <button className="icon-btn mobile-search-icon" onClick={() => setMobileSearchOpen(true)} title="Search">🔍</button>
+                <button className="icon-btn mobile-only" onClick={() => setMobileSearchOpen(true)} title="Search">
+                  {Icons.Search}
+                </button>
+
                 {!isGuest && <NotificationPanel />}
 
                 {isGuest ? (
-                  <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-                    <button className="auth-btn-login" onClick={() => navigate("/login")}>Login</button>
-                    <button className="auth-btn-signup" onClick={() => navigate("/signup")}>Sign up</button>
+                  <div style={{ display: "flex", gap: "8px" }}>
+                    <button className="btn-secondary" onClick={() => navigate("/login")}>Login</button>
+                    <button className="btn-primary" onClick={() => navigate("/signup")}>Sign up</button>
                   </div>
                 ) : (
-                  <button className="icon-btn desktop-only-logout" onClick={handleLogout} title="Logout" style={{ fontSize: "17px" }}>⏻</button>
+                  <button className="icon-btn desktop-only" onClick={handleLogout} title="Logout" style={{ color: "#EF4444" }}>
+                    {Icons.Logout}
+                  </button>
                 )}
               </div>
             </>
           ) : (
-            <div className="mobile-search-bar" style={{ display: "flex", alignItems: "center", gap: "10px", width: "100%" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", width: "100%" }}>
               <button className="icon-btn" onClick={() => setMobileSearchOpen(false)} title="Back">←</button>
-              <div style={{ position: "relative", flex: 1 }}>
-                <span style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", fontSize: "13px", color: c.textFaint, pointerEvents: "none" }}>🔍</span>
-                <input className="top-search" style={{ maxWidth: "none" }} placeholder="Search everything..." autoFocus />
+              <div className="top-search-wrapper" style={{ maxWidth: "none", flex: 1 }}>
+                <span className="top-search-icon">{Icons.Search}</span>
+                <input className="top-search" placeholder="Search everything..." autoFocus />
               </div>
             </div>
           )}
         </header>
 
-        {/* Page Main Content */}
-        <main style={{ flex: 1, overflowY: "auto", overflowX: "hidden", padding: "20px", background: c.bg }}>
+        {/* PAGE CONTENT */}
+        <main className="hide-scrollbar" style={{ flex: 1, overflowY: "auto", overflowX: "hidden", padding: "28px 24px", background: "var(--theme-bg)" }}>
           {children}
         </main>
       </div>

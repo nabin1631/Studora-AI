@@ -338,6 +338,32 @@ app.put("/api/user/change-password", protect, async (req, res) => {
   }
 });
 
+// Delete account
+app.delete("/api/user/delete-account", protect, async (req, res) => {
+  try {
+    const userId = req.user._id; // Delete all user data
+    await Promise.all([
+      require("./models/Note").deleteMany({ user: userId }),
+      require("./models/Task").deleteMany({ user: userId }),
+      require("./models/Chat").deleteMany({ user: userId }),
+      require("./models/Pdf").deleteMany({ user: userId }),
+      require("./models/Quiz").deleteMany({ createdBy: userId }),
+      require("./models/QuizAttempt").deleteMany({ user: userId }),
+      require("./models/User").findByIdAndDelete(userId),
+    ]);
+
+    res.json({
+      success: true,
+      message: "Account deleted successfully",
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
 // ==============================
 // Notifications Center Endpoint
 // ==============================
@@ -510,6 +536,12 @@ app.use((req, res) => {
     success: false,
     message: "Route Not Found",
   });
+});
+
+const PORT = process.env.PORT || 5000;
+
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`STUDORA AI Backend running on port ${PORT}`);
 });
 
 module.exports = app;

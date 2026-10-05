@@ -851,7 +851,7 @@ function AiTutor() {
           </div>
 
           <div style={{ padding: "12px", borderTop: `1px solid ${theme.border}`, display: "flex", justifyContent: "center", flexShrink: 0 }}>
-            <span style={{ fontSize: "11px", color: theme.textMuted }}>Powered by Gemini AI</span>
+            <span style={{ fontSize: "11px", color: theme.textMuted }}>Powered by Studora AI </span>
           </div>
         </aside>
 

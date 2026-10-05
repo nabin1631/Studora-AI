@@ -1,6 +1,8 @@
 const Quiz = require("../models/Quiz");
 const QuizAttempt = require("../models/QuizAttempt");
 const User = require("../models/User");
+const Bookmark = require("../models/Bookmark");
+const MistakeBook = require("../models/MistakeBook");
 const Groq = require("groq-sdk");
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
@@ -50,8 +52,7 @@ const updateStreak = (user) => {
     user.lastQuizDate = new Date();
 };
 
-
-// Generate AI quiz
+// Generate AI quiz with batching support
 const generateQuiz = async (req, res) => {
     try {
         const { subject, topic, difficulty, questionCount = 5 } = req.body;
@@ -63,65 +64,92 @@ const generateQuiz = async (req, res) => {
             });
         }
 
-        const prompt = `Generate ${questionCount} multiple choice quiz questions about ${topic || subject} for ${difficulty || "medium"} difficulty level.
+        const count = Math.min(parseInt(questionCount), 50);
+        const batchSize = 10;
+        const batches = Math.ceil(count / batchSize);
+        let allQuestions = [];
 
-Return ONLY a valid JSON array with this exact structure, no other text:
+        for (let batch = 0; batch < batches; batch++) {
+            const batchCount = Math.min(batchSize, count - (batch * batchSize));
+            const startIndex = batch * batchSize + 1;
+
+            const prompt = `Generate exactly ${batchCount} multiple choice quiz questions about ${topic || subject} for ${difficulty || "medium"} difficulty level.${batches > 1 ? ` This is batch ${batch + 1} of ${batches}. Start from question ${startIndex}. Make sure questions are DIFFERENT from previous batches.` : ""} Return ONLY a valid JSON array, no other text, no markdown:
 [
   {
     "question": "Question text here?",
     "options": ["Option A", "Option B", "Option C", "Option D"],
     "answer": "Option A",
-    "explanation": "Brief explanation why this is correct"
+    "explanation": "Brief explanation (1-2 sentences)"
   }
 ]
-
 Requirements:
-- Make questions educational and relevant for students
+- Exactly ${batchCount} questions
 - Each question must have exactly 4 options
-- The answer must exactly match one of the options
-- Explanations should be brief (1-2 sentences)
+- Answer must exactly match one of the options
 - Difficulty: ${difficulty || "medium"}
 - Subject: ${subject}
-- Topic: ${topic || subject}`;
+- Topic: ${topic || subject}
+- No duplicate questions
+- Educational and accurate`;
 
-        const completion = await groq.chat.completions.create({
-            model: "llama-3.3-70b-versatile",
-            messages: [
-                { role: "system", content: "You are an expert quiz generator. Always return valid JSON only, no markdown, no extra text." },
-                { role: "user", content: prompt }
-            ],
-            temperature: 0.7,
-            max_tokens: 2000
+            const completion = await groq.chat.completions.create({
+                model: "openai/gpt-oss-120b",
+                messages: [
+                    {
+                        role: "system",
+                        content: "You are an expert quiz generator. Always return valid JSON arrays only. No markdown, no extra text, no code blocks."
+                    },
+                    { role: "user", content: prompt }
+                ],
+                temperature: 0.7 + (batch * 0.05),
+                max_tokens: 4096
+            });
+
+            let raw = completion.choices[0].message.content.trim();
+            raw = raw.replace(/```json/g, "").replace(/```/g, "").trim();
+
+            // Extract JSON array even if there's extra text
+            const match = raw.match(/\[[\s\S]*\]/);
+            if (!match) {
+                console.error(`Batch ${batch + 1} failed to parse:`, raw.slice(0, 200));
+                continue;
+            }
+
+            try {
+                const batchQuestions = JSON.parse(match[0]);
+                if (Array.isArray(batchQuestions)) {
+                    allQuestions = [...allQuestions, ...batchQuestions];
+                }
+            } catch (parseErr) {
+                console.error(`Batch ${batch + 1} JSON parse error:`, parseErr.message);
+                continue;
+            }
+        }
+
+        if (allQuestions.length === 0) {
+            return res.status(500).json({
+                success: false,
+                message: "AI could not generate questions. Please try again."
+            });
+        }
+
+        // Remove duplicates
+        const seen = new Set();
+        allQuestions = allQuestions.filter(q => {
+            if (seen.has(q.question)) return false;
+            seen.add(q.question);
+            return true;
         });
 
-        let questionsRaw = completion.choices[0].message.content.trim();
-
-        // Clean up response
-        questionsRaw = questionsRaw.replace(/```json/g, "").replace(/```/g, "").trim();
-
-        let questions;
-        try {
-            questions = JSON.parse(questionsRaw);
-        } catch {
-            return res.status(500).json({
-                success: false,
-                message: "AI returned invalid format. Please try again."
-            });
-        }
-
-        if (!Array.isArray(questions) || questions.length === 0) {
-            return res.status(500).json({
-                success: false,
-                message: "Could not generate questions. Please try again."
-            });
-        }
+        // Trim to requested count
+        allQuestions = allQuestions.slice(0, count);
 
         const quiz = await Quiz.create({
             createdBy: req.user._id,
             subject,
             topic: topic || subject,
             difficulty: difficulty || "medium",
-            questions,
+            questions: allQuestions,
             type: "ai-generated"
         });
 
@@ -138,7 +166,6 @@ Requirements:
         });
     }
 };
-
 
 // Submit quiz attempt
 const submitAttempt = async (req, res) => {
@@ -197,6 +224,28 @@ const submitAttempt = async (req, res) => {
 
         await user.save();
 
+        // Auto-save wrong answers to mistake book
+        for (let i = 0; i < processedAnswers.length; i++) {
+            if (!processedAnswers[i].correct) {
+                const q = quiz.questions[i];
+                const existing = await MistakeBook.findOne({ user: req.user._id, question: q.question });
+                if (!existing) {
+                    await MistakeBook.create({
+                        user: req.user._id,
+                        question: q.question,
+                        options: q.options,
+                        answer: q.answer,
+                        explanation: q.explanation || "",
+                        subject: quiz.subject,
+                        userAnswer: processedAnswers[i].selectedAnswer,
+                    });
+                } else {
+                    existing.reviewedCount += 1;
+                    await existing.save();
+                }
+            }
+        }
+
         res.json({
             success: true,
             attempt,
@@ -217,7 +266,6 @@ const submitAttempt = async (req, res) => {
         });
     }
 };
-
 
 // Get user quiz stats
 const getStats = async (req, res) => {
@@ -259,9 +307,182 @@ const getStats = async (req, res) => {
     }
 };
 
+// Get bookmarks
+const getBookmarks = async (req, res) => {
+    try {
+        const bookmarks = await Bookmark.find({ user: req.user._id })
+            .sort({ createdAt: -1 })
+            .lean();
+
+        res.json({
+            success: true,
+            bookmarks,
+            count: bookmarks.length
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+// Add / toggle bookmark
+const addBookmark = async (req, res) => {
+    try {
+        const { question, options, answer, explanation, subject, quizId } = req.body;
+
+        if (!question || !answer) {
+            return res.status(400).json({
+                success: false,
+                message: "Question and answer are required"
+            });
+        }
+
+        const existing = await Bookmark.findOne({
+            user: req.user._id,
+            question: question.trim()
+        });
+
+        if (existing) {
+            await existing.deleteOne();
+            return res.json({
+                success: true,
+                bookmarked: false,
+                message: "Bookmark removed"
+            });
+        }
+
+        const bookmark = await Bookmark.create({
+            user: req.user._id,
+            question: question.trim(),
+            options: options || [],
+            answer: answer.trim(),
+            explanation: explanation || "",
+            subject: subject || "General",
+            quizId: quizId || null
+        });
+
+        res.status(201).json({
+            success: true,
+            bookmarked: true,
+            bookmark
+        });
+
+    } catch (error) {
+        console.error("Bookmark error:", error);
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+// Get mistake book
+const getMistakes = async (req, res) => {
+    try {
+        const mistakes = await MistakeBook.find({ user: req.user._id, mastered: false }).sort({ createdAt: -1 });
+        res.json({ success: true, mistakes });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// Mark mistake as mastered
+const masterMistake = async (req, res) => {
+    try {
+        const mistake = await MistakeBook.findOneAndUpdate(
+            { _id: req.params.id, user: req.user._id },
+            { mastered: true },
+            { new: true }
+        );
+        res.json({ success: true, mistake });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// Get daily challenge
+const getDailyChallenge = async (req, res) => {
+    try {
+        const today = new Date(); 
+        today.setHours(0, 0, 0, 0);
+        const subjects = ["Math", "Physics", "Chemistry", "Biology", "English", "Computer Science", "General Knowledge"];
+        const todaySubject = subjects[today.getDate() % subjects.length];
+        res.json({
+            success: true,
+            challenge: {
+                subject: todaySubject,
+                questionCount: 20,
+                difficulty: "medium",
+                reward: 100,
+                date: today,
+            }
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// Get performance analytics
+const getPerformanceAnalytics = async (req, res) => {
+    try {
+        const attempts = await QuizAttempt.find({ user: req.user._id })
+            .sort({ createdAt: -1 })
+            .limit(20);
+
+        const subjectPerformance = await QuizAttempt.aggregate([
+            { $match: { user: req.user._id } },
+            { $group: {
+                _id: "$subject",
+                totalQuestions: { $sum: "$totalQuestions" },
+                totalCorrect: { $sum: "$score" },
+                attempts: { $sum: 1 },
+                avgScore: { $avg: { $multiply: [{ $divide: ["$score", "$totalQuestions"] }, 100] } }
+            }},
+            { $sort: { avgScore: -1 } }
+        ]);
+
+        const chartData = attempts.slice(0, 10).reverse().map((a, i) => ({
+            label: `Quiz ${i + 1}`,
+            accuracy: Math.round((a.score / a.totalQuestions) * 100),
+            subject: a.subject,
+            date: a.createdAt,
+        }));
+
+        const bestSubject = subjectPerformance[0]?._id || "N/A";
+        const weakSubject = subjectPerformance[subjectPerformance.length - 1]?._id || "N/A";
+        const totalCorrect = attempts.reduce((s, a) => s + a.score, 0);
+        const totalQuestions = attempts.reduce((s, a) => s + a.totalQuestions, 0);
+        const avgTime = attempts.length ? Math.round(attempts.reduce((s, a) => s + (a.timeTaken || 0), 0) / attempts.length) : 0;
+
+        res.json({
+            success: true,
+            analytics: {
+                chartData,
+                subjectPerformance,
+                bestSubject,
+                weakSubject,
+                totalCorrect,
+                totalQuestions,
+                overallAccuracy: totalQuestions ? Math.round((totalCorrect / totalQuestions) * 100) : 0,
+                avgTime,
+                totalAttempts: attempts.length,
+            }
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
 
 module.exports = {
     generateQuiz,
     submitAttempt,
-    getStats
+    getStats,
+    getBookmarks,
+    addBookmark,
+    getMistakes,
+    masterMistake,
+    getDailyChallenge,
+    getPerformanceAnalytics,
 };

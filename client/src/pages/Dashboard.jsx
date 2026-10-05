@@ -1,785 +1,969 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
-import { motion } from "framer-motion";
 import Layout from "../components/Layout";
 import api from "../services/api";
 
-const PRIORITY_COLORS = {
-  low: "#0eb47d",
-  medium: "#f19b08",
-  high: "#ea4040",
-};
-
-const stripHtml = (html = "") =>
-  html
-    .replace(/<[^>]*>/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-
-const formatDate = (dateStr) => {
-  const d = new Date(dateStr);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  const tomorrow = new Date(today);
-  tomorrow.setDate(today.getDate() + 1);
-
-  d.setHours(0, 0, 0, 0);
-
-  if (d.getTime() === today.getTime()) return "Today";
-  if (d.getTime() === tomorrow.getTime()) return "Tomorrow";
-
-  return d.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-  });
-};
-
-// Premium Component for Smooth Number Counting Animations
-function AnimatedCounter({ from = 0, to }) {
-  const target = parseInt(to, 10) || 0;
-  const [count, setCount] = useState(from);
-
+// Animated number counter hook
+function useCounter(target, duration = 800) {
+  const [count, setCount] = useState(0);
+  const [started, setStarted] = useState(false);
   useEffect(() => {
-    let startTimestamp = null;
-    const duration = 800; // ms
-
+    if (!started || target === 0) { setCount(target); return; }
+    let startTime = null;
     const step = (timestamp) => {
-      if (!startTimestamp) startTimestamp = timestamp;
-      const progress = Math.min((timestamp - startTimestamp) / duration, 1);
-      setCount(Math.floor(progress * (target - from) + from));
-      if (progress < 1) {
-        window.requestAnimationFrame(step);
-      } else {
-        setCount(target); // ✅ Fixed: Removed the accidental 'count:' label that broke ESLint
-      }
+      if (!startTime) startTime = timestamp;
+      const progress = Math.min((timestamp - startTime) / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setCount(Math.round(eased * target));
+      if (progress < 1) requestAnimationFrame(step);
     };
-
-    let animationFrameId = window.requestAnimationFrame(step);
-    return () => window.cancelAnimationFrame(animationFrameId);
-  }, [target, from]);
-
-  return <span>{count}</span>;
+    requestAnimationFrame(step);
+  }, [target, started, duration]);
+  return { count, start: () => setStarted(true) };
 }
 
-function Dashboard() {
-  const { user } = useAuth();
-  const { colors: c } = useTheme();
-  const navigate = useNavigate();
+// KPI Stat Card Component
+function StatCard({ label, target, icon, color, onClick, delay = 0 }) {
+  const { count, start } = useCounter(typeof target === "number" ? target : 0, 800);
+  const ref = useRef(null);
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) { setTimeout(start, delay); } },
+      { threshold: 0.3 }
+    );
+    if (ref.current) observer.observe(ref.current);
+    return () => observer.disconnect();
+  }, [delay, start]);
+  return (
+    <div ref={ref} onClick={onClick} className="kpi-card">
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
+        <div style={{
+          width: 38,
+          height: 38,
+          borderRadius: "10px",
+          background: `${color}12`,
+          color: color,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: "18px"
+        }}>
+          {icon}
+        </div>
+      </div>
+      <p style={{ margin: 0, fontSize: "28px", fontWeight: "800", color: "#0F172A", letterSpacing: "-0.02em", lineHeight: 1.1 }}>
+        {typeof target === "number" ? count : target ?? "0"}
+      </p>
+      <p style={{ margin: "4px 0 0", fontSize: "13px", color: "#64748B", fontWeight: "500" }}>
+        {label}
+      </p>
+    </div>
+  );
+}
 
+export default function Dashboard() {
+  const { user } = useAuth();
+  const { mode } = useTheme();
+  const navigate = useNavigate();
+  const isDark = mode === "dark";
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
-
-  const greeting = useMemo(() => {
-    const hour = new Date().getHours();
-    if (hour < 12) return "Good morning";
-    if (hour < 17) return "Good afternoon";
-    return "Good evening";
-  }, []);
+  const [greeting, setGreeting] = useState("");
+  const [greetingIcon, setGreetingIcon] = useState("");
 
   useEffect(() => {
-    const loadDashboard = async () => {
-      try {
-        setLoading(true);
-        const res = await api.get("/dashboard/stats");
-        setStats(res?.data?.stats || null);
-      } catch (error) {
-        console.error("Failed to load dashboard stats:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadDashboard();
+    const h = new Date().getHours();
+    if (h < 12) { setGreeting("Good morning"); setGreetingIcon("☀️"); }
+    else if (h < 17) { setGreeting("Good afternoon"); setGreetingIcon("🌤️"); }
+    else { setGreeting("Good evening"); setGreetingIcon("🌙"); }
+    fetchStats();
   }, []);
 
-  const taskProgress = useMemo(() => {
-    if (!stats?.totalTasks) return 0;
-    return Math.round((stats.completedTasks / stats.totalTasks) * 100);
-  }, [stats]);
-
-  const todayProgress = useMemo(() => {
-    if (!stats?.todayTasksCount) return 0;
-    return Math.round((stats.todayCompletedCount / stats.todayTasksCount) * 100);
-  }, [stats]);
-
-  // Framer motion variants definition
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    show: {
-      opacity: 1,
-      transition: { staggerChildren: 0.05, delayChildren: 0.02 }
+  const fetchStats = async () => {
+    setLoading(true);
+    try {
+      const res = await api.get("/dashboard/stats");
+      setStats(res.data.stats);
+    } catch { 
+      console.error("Failed to fetch stats"); 
+    } finally { 
+      setLoading(false); 
     }
   };
 
-  const itemVariants = {
-    hidden: { opacity: 0, y: 15 },
-    show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 120, damping: 14 } }
+  const PRIORITY_COLORS = { low: "#10B981", medium: "#F59E0B", high: "#EF4444" };
+  const stripHtml = (html) => (html || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+
+  // Progress Data Calculations
+  const taskProgress = stats?.totalTasks > 0 ? Math.round((stats.completedTasks / stats.totalTasks) * 100) : 0;
+  const todayCompleted = stats?.todayCompletedCount ?? 0;
+  const todayTotal = stats?.todayTasksCount ?? 0;
+  const todayProgress = todayTotal > 0 ? Math.round((todayCompleted / todayTotal) * 100) : 0;
+
+  // Donut SVG Calculations
+  const RING_R = 48;
+  const RING_CIRC = 2 * Math.PI * RING_R;
+  const strokeOffset = RING_CIRC - (RING_CIRC * taskProgress) / 100;
+
+  const formatDate = (dateStr) => {
+    const d = new Date(dateStr), today = new Date(), tomorrow = new Date();
+    tomorrow.setDate(today.getDate() + 1);
+    [d, today, tomorrow].forEach(x => x.setHours(0,0,0,0));
+    if (d.getTime() === today.getTime()) return "Today";
+    if (d.getTime() === tomorrow.getTime()) return "Tomorrow";
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   };
+
+  const QUICK_ACTIONS = [
+    { icon: "📝", label: "New Note", desc: "Rich-text editor", path: "/notes", color: "#2563EB" },
+    { icon: "📅", label: "Add Task", desc: "Study planner", path: "/planner", color: "#6366F1" },
+    { icon: "🤖", label: "AI Tutor", desc: "Ask anything", path: "/ai-tutor", color: "#10B981" },
+    { icon: "🎮", label: "Quiz Arena", desc: "Test knowledge", path: "/quiz-arena", color: "#EF4444" },
+    { icon: "📄", label: "PDF AI", desc: "Chat with PDF", path: "/pdf-ai", color: "#F59E0B" },
+    { icon: "📊", label: "Analytics", desc: "Track progress", path: "/analytics", color: "#8B5CF6" },
+  ];
 
   return (
     <Layout>
       <style>{`
-        /* --- Performance Optimized Keyframes --- */
-        @keyframes dynamicGradient {
-          0% { background-position: 0% 50%; }
-          50% { background-position: 100% 50%; }
-          100% { background-position: 0% 50%; }
-        }
-
-        @keyframes microFloat1 {
-          0%, 100% { transform: translateY(0) scale(1); }
-          50% { transform: translateY(-6px) scale(1.02); }
-        }
-
-        @keyframes microFloat2 {
-          0%, 100% { transform: translateY(0) scale(1.03); }
-          50% { transform: translateY(4px) scale(0.97); }
-        }
-
-        /* --- Unified Responsive Engine Layout --- */
-        .dash-container {
-          max-width: 1140px;
-          margin: 0 auto;
-          padding: 0 12px;
+        /* Global box-sizing guard */
+        .dash-container,
+        .dash-container * {
           box-sizing: border-box;
         }
 
-        .responsive-grid-2col {
+        /* Prevent Grid Child Overflow */
+        .kpi-grid > *,
+        .middle-grid > *,
+        .bottom-grid > * {
+          min-width: 0;
+        }
+
+        /* Container Rules */
+        .dash-container {
+          width: 100%;
+          max-width: 1140px;
+          margin: 0 auto;
+          box-sizing: border-box;
+          background-color: ${isDark ? "transparent" : "#F6F8FC"};
+          padding: 8px 0 32px;
+        }
+
+        /* Dash Card Base */
+        .dash-card {
+          background: ${isDark ? "rgba(255,255,255,0.03)" : "#FFFFFF"};
+          border: 1px solid ${isDark ? "rgba(255,255,255,0.08)" : "#E2E8F0"};
+          border-radius: 18px;
+          padding: 24px;
+          position: relative;
+          transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s ease, border-color 0.2s ease;
+        }
+
+        /* KPI Grid Base */
+        .kpi-grid {
           display: grid;
-          grid-template-columns: 1fr;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 12px;
+          margin-bottom: 16px;
+        }
+
+        .kpi-card {
+          background: ${isDark ? "rgba(255,255,255,0.03)" : "#FFFFFF"};
+          border: 1px solid ${isDark ? "rgba(255,255,255,0.08)" : "#E2E8F0"};
+          border-radius: 14px;
+          padding: 18px 20px;
+          cursor: pointer;
+          position: relative;
+          min-width: 0;
+          transition: all 0.2s ease;
+        }
+
+        .dash-card:hover, .kpi-card:hover {
+          transform: translateY(-3px);
+          box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.06), 0 8px 10px -6px rgba(15, 23, 42, 0.04);
+          border-color: #6366F1;
+        }
+
+        /* Header Actions */
+        .header-actions {
+          display: flex;
+          gap: 10px;
+        }
+
+        /* Mini Stats */
+        .mini-stats {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+          margin-bottom: 18px;
+          align-items: center;
+        }
+
+        .mini-stat-badge {
+          min-width: 0;
+          white-space: nowrap;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          background: ${isDark ? "rgba(255,255,255,0.04)" : "#FFFFFF"};
+          border: 1px solid ${isDark ? "rgba(255,255,255,0.08)" : "#E2E8F0"};
+          padding: 4px 10px;
+          border-radius: 20px;
+        }
+
+        /* Middle Grid Layout */
+        .middle-grid {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
           gap: 16px;
           margin-bottom: 16px;
         }
 
-        .stats-responsive-grid {
+        /* Progress Section Inside Study Progress */
+        .progress-main {
           display: grid;
-          grid-template-columns: repeat(2, 1fr);
-          gap: 12px;
-          margin-bottom: 16px;
-        }
-
-        /* --- Optimized Premium Theme Component Base Architecture --- */
-        .dash-card {
-          background: ${c.bgCard};
-          border: 1px solid ${c.border};
-          border-radius: 24px;
-          padding: 16px;
-          position: relative;
-          overflow: hidden;
-          box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.02);
-          box-sizing: border-box;
-        }
-
-        .stat-card {
-          background: ${c.bgCard};
-          border: 1px solid ${c.border};
-          border-radius: 16px;
-          padding: 12px 10px;
-          display: flex;
+          grid-template-columns: 116px minmax(0, 1fr);
+          gap: 20px;
           align-items: center;
-          gap: 10px;
-          cursor: pointer;
+          margin-bottom: 24px;
+        }
+
+        .progress-details {
           min-width: 0;
-          box-shadow: 0 4px 14px -3px rgba(0, 0, 0, 0.01);
-          box-sizing: border-box;
+          width: 100%;
+        }
+
+        /* Study Summary Cards */
+        .study-summary {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 12px;
+        }
+
+        /* Quick Actions Grid */
+        .quick-actions-grid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 10px;
         }
 
         .quick-btn {
-          width: 100%;
           display: flex;
           align-items: center;
           gap: 12px;
-          padding: 12px;
-          border-radius: 14px;
-          border: 1px solid ${c.border};
-          background: ${c.bgCard};
+          padding: 10px 14px;
+          border-radius: 10px;
+          border: 1px solid ${isDark ? "rgba(255,255,255,0.08)" : "#E2E8F0"};
+          background: ${isDark ? "rgba(255,255,255,0.02)" : "#FFFFFF"};
           cursor: pointer;
+          transition: all 0.15s ease;
+          text-align: left;
+          min-width: 0;
+          width: 100%;
           box-sizing: border-box;
-          transition: border-color 0.2s ease, background-color 0.2s ease;
         }
 
-        .recent-item, .task-item {
+        .quick-btn:hover {
+          border-color: #6366F1;
+          transform: translateY(-1px);
+          background: ${isDark ? "rgba(99,102,241,0.08)" : "#F8FAFC"};
+        }
+
+        /* Recent Notes Rows */
+        .recent-row {
           display: flex;
           align-items: center;
           gap: 12px;
-          padding: 12px 0;
-          border-bottom: 1px solid ${c.border};
-          box-sizing: border-box;
+          padding: 8px 10px;
+          border-radius: 8px;
+          cursor: pointer;
+          transition: background 0.15s;
+          margin-bottom: 4px;
+          min-width: 0;
         }
-        
-        .recent-item { cursor: pointer; }
-        .recent-item:last-child, .task-item:last-child { border-bottom: none; }
 
-        /* --- Progress Rings Dynamic Layout Adaptability --- */
-        .progress-visualization-wrapper {
+        .recent-row:hover {
+          background: ${isDark ? "rgba(255,255,255,0.05)" : "#F1F5F9"};
+        }
+
+        .recent-row-content {
+          min-width: 0;
+          flex: 1;
+        }
+
+        .recent-row-title,
+        .recent-row-description {
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .recent-row-meta {
           display: flex;
           flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          gap: 20px;
-          padding: 12px 0;
-        }
-
-        .ring-element-container {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          text-align: center;
-          gap: 8px;
-          width: 100%;
-        }
-
-        .ring-element-box {
-          position: relative;
-          width: 120px;
-          height: 120px;
+          align-items: flex-end;
+          gap: 2px;
           flex-shrink: 0;
         }
 
-        .ring-meta-title {
-          font-size: 14px;
-          font-weight: 700;
-          color: ${c.text};
-          margin: 0;
-        }
-
-        .ring-meta-sub {
-          font-size: 12px;
-          color: ${c.textMuted};
-          margin: 2px 0 0 0;
-        }
-
-        /* --- Mini Layout Cards Grid for bottom statistics --- */
-        .bottom-stats-grid {
+        /* Bottom Grid Layout */
+        .bottom-grid {
           display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 8px;
-          margin-top: 20px;
+          grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+          gap: 16px;
+          align-items: start;
         }
 
-        .mini-status-card {
-          background: ${c.bg};
-          border: 1px solid ${c.border};
-          padding: 10px 4px;
-          border-radius: 16px;
-          text-align: center;
+        .upcoming-tasks-card {
+          height: fit-content;
+          align-self: start;
         }
 
-        /* --- Custom Hero Optimization Classes --- */
-        .hero-section {
-          background: linear-gradient(-45deg, #4840d9, #7536e1, #1858e3, #09bfdf);
-          background-size: 400% 400%;
-          animation: dynamicGradient 10s ease infinite;
-          border-radius: 24px;
-          padding: 18px 16px;
-          margin-bottom: 16px;
+        /* Upcoming Task Items */
+        .task-card-item {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 10px 14px;
+          border-radius: 10px;
+          margin-bottom: 6px;
+          cursor: pointer;
           position: relative;
           overflow: hidden;
-          box-shadow: 0 20px 35px -5px rgba(79, 70, 229, 0.25), inset 0 -6px 12px rgba(0,0,0,0.12), inset 0 6px 12px rgba(255,255,255,0.22);
+          background: ${isDark ? "rgba(255,255,255,0.02)" : "#FFFFFF"};
+          border: 1px solid ${isDark ? "rgba(255,255,255,0.06)" : "#EEF2F6"};
+          box-shadow: 0 2px 5px rgba(0, 0, 0, 0.02);
+          transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), 
+                      border-color 0.2s ease, 
+                      background-color 0.2s ease, 
+                      box-shadow 0.2s ease;
+          min-width: 0;
+          width: 100%;
+          box-sizing: border-box;
         }
 
-        .hero-pill-grid {
-          display: grid;
-          grid-template-columns: repeat(2, 1fr);
+        .task-card-item:hover {
+          transform: translateY(-2px);
+          background: ${isDark ? "rgba(99, 102, 241, 0.08)" : "#F5F8FF"};
+          border-color: ${isDark ? "rgba(99, 102, 241, 0.4)" : "#C7D2FE"};
+          box-shadow: 0 6px 16px -4px rgba(99, 102, 241, 0.12);
+        }
+
+        .task-card-item::before {
+          content: "";
+          position: absolute;
+          inset: 0;
+          background: radial-gradient(600px circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(99, 102, 241, 0.06), transparent 40%);
+          opacity: 0;
+          transition: opacity 0.3s ease;
+          pointer-events: none;
+        }
+
+        .task-card-item:hover::before {
+          opacity: 1;
+        }
+
+        .task-card-item:hover .task-arrow {
+          transform: translateX(4px);
+          color: #6366F1;
+        }
+
+        .task-card-item:active {
+          transform: scale(0.99) translateY(0);
+        }
+
+        .task-content {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding-left: 4px;
+          min-width: 0;
+          flex: 1;
+        }
+
+        .task-text {
+          min-width: 0;
+          flex: 1;
+        }
+
+        .task-title {
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .task-meta {
+          display: flex;
+          align-items: center;
           gap: 8px;
+          flex-shrink: 0;
         }
 
-        /* --- Device Resolution Breakpoints Mapping --- */
-        @media (min-width: 400px) {
-          .progress-visualization-wrapper {
-            flex-direction: row;
-            justify-content: space-around;
+        .view-btn {
+          background: none; border: none; color: #6366F1;
+          font-size: 13px; font-weight: 600; cursor: pointer;
+          padding: 4px 8px; border-radius: 6px; transition: background 0.15s;
+        }
+
+        .view-btn:hover { background: rgba(99,102,241,0.08); }
+
+        .skeleton {
+          background: ${isDark ? "rgba(255,255,255,0.05)" : "#E2E8F0"};
+          border-radius: 8px;
+        }
+
+        /* ── TABLET BREAKPOINT (601px - 867px) ── */
+        @media (max-width: 867px) {
+          .dash-container {
+            padding: 8px 16px 32px;
           }
-          .ring-element-container {
-            width: auto;
-            flex: 1;
+
+          .kpi-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
           }
-          .ring-element-box {
-            width: 130px;
-            height: 130px;
+
+          .middle-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .bottom-grid {
+            grid-template-columns: 1fr;
           }
         }
 
-        @media (min-width: 576px) {
+        /* ── MOBILE BREAKPOINT (381px - 600px) ── */
+        @media (max-width: 600px) {
+          .dash-container {
+            padding: 8px 12px 28px;
+          }
+
           .dash-card {
-            padding: 24px;
+            padding: 18px;
+            border-radius: 16px;
           }
-          .hero-section {
-            padding: 32px 28px;
-            margin-bottom: 20px;
+
+          .dashboard-title {
+            font-size: 22px;
+            line-height: 1.25;
           }
-          .hero-pill-grid {
-            display: flex;
+
+          .header-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+          }
+
+          .header-actions button {
+            width: 100%;
+          }
+
+          .kpi-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 10px;
           }
-          .stats-responsive-grid {
-            grid-template-columns: repeat(4, 1fr);
-            gap: 16px;
+
+          .kpi-card {
+            padding: 15px 14px;
+            min-width: 0;
           }
-          .bottom-stats-grid {
+
+          .progress-main {
+            grid-template-columns: 1fr;
+            justify-items: center;
+            gap: 18px;
+          }
+
+          .progress-details {
+            width: 100%;
+          }
+
+          .study-summary {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 8px;
+          }
+
+          .quick-actions-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+          }
+
+          .bottom-grid {
+            grid-template-columns: 1fr;
             gap: 12px;
           }
-          .mini-status-card {
-            padding: 14px 8px;
-          }
-          .ring-element-box {
-            width: 145px;
-            height: 145px;
+
+          .task-priority {
+            display: none;
           }
         }
 
-        @media (min-width: 768px) {
-          .dash-container { padding: 0 24px; }
-          .responsive-grid-2col { grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
-          .stats-responsive-grid { margin-bottom: 20px; }
+        /* ── SMALL PHONES BREAKPOINT (<= 380px) ── */
+        @media (max-width: 380px) {
+          .dash-container {
+            padding-left: 10px;
+            padding-right: 10px;
+          }
+
+          .dash-card {
+            padding: 15px;
+          }
+
+          .header-actions {
+            grid-template-columns: 1fr;
+          }
+
+          .kpi-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .study-summary {
+            grid-template-columns: 1fr;
+          }
+
+          .quick-actions-grid {
+            grid-template-columns: 1fr;
+          }
+        }
+
+        /* ── MOBILE TOUCH HOVER DISABLE ── */
+        @media (hover: none) {
+          .dash-card:hover,
+          .kpi-card:hover,
+          .task-card-item:hover,
+          .quick-btn:hover {
+            transform: none;
+          }
         }
       `}</style>
-
-      <motion.div 
-        className="dash-container"
-        variants={containerVariants}
-        initial="hidden"
-        animate="show"
-      >
-        
-        {/* Welcome Header Section */}
-        <motion.div
-          className="hero-section"
-          variants={itemVariants}
-        >
-          <div style={{
-            position: "absolute", top: "-30px", right: "5%", width: "140px", height: "140px",
-            borderRadius: "50%", background: "rgba(6, 182, 212, 0.35)", filter: "blur(20px)",
-            animation: "microFloat1 6s ease-in-out infinite"
-          }} />
-          <div style={{
-            position: "absolute", bottom: "-40px", left: "25%", width: "110px", height: "110px",
-            borderRadius: "50%", background: "rgba(124, 58, 237, 0.3)", filter: "blur(15px)",
-            animation: "microFloat2 8s ease-in-out infinite alternate"
-          }} />
-
-          <div style={{ position: "relative", zIndex: 2 }}>
-            <span style={{
-              background: "rgba(255, 255, 255, 0.16)", backdropFilter: "blur(8px)",
-              padding: "4px 10px", borderRadius: "999px", color: "#FFF", fontSize: "12px",
-              fontWeight: "600", display: "inline-block", marginBottom: "8px",
-              border: "1px solid rgba(255, 255, 255, 0.2)"
-            }}>
-              {greeting} ✨
-            </span>
-
-            <h1 style={{
-              color: "#FFFFFF", fontSize: "clamp(22px, 4.5vw, 36px)", fontWeight: "850",
-              letterSpacing: "-0.5px", margin: "0 0 6px 0", lineHeight: 1.15
-            }}>
-              Welcome back, {user?.name || "Scholar"}!
-            </h1>
-
-            <p style={{
-              color: "rgba(255, 255, 255, 0.9)", fontSize: "clamp(13px, 2.3vw, 15px)",
-              maxWidth: "580px", margin: "0 0 14px 0", lineHeight: 1.4
-            }}>
-              Your current roadmap performance indices are optimized. You have {stats?.pendingTasks || 0} active task lines awaiting processing.
-            </p>
-
-            <div className="hero-pill-grid">
-              <div style={{
-                background: "rgba(255, 255, 255, 0.12)", backdropFilter: "blur(6px)",
-                border: "1px solid rgba(255, 255, 255, 0.12)", padding: "6px 10px",
-                borderRadius: "12px", color: "#FFF", fontSize: "12px", fontWeight: "600",
-                textAlign: "center"
-              }}>
-                📝 <AnimatedCounter to={stats?.totalNotes} /> Notes
-              </div>
-              <div style={{
-                background: "rgba(255, 255, 255, 0.12)", backdropFilter: "blur(6px)",
-                border: "1px solid rgba(255, 255, 255, 0.12)", padding: "6px 10px",
-                borderRadius: "12px", color: "#FFF", fontSize: "12px", fontWeight: "600",
-                textAlign: "center"
-              }}>
-                ⏳ <AnimatedCounter to={stats?.pendingTasks} /> Pending
-              </div>
-            </div>
+      <div className="dash-container">
+        {/* ── 1. COMPACT WORKSPACE HEADER ── */}
+        <div className="dashboard-header" style={{ marginBottom: "20px", padding: "4px 0" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" }}>
+            <span style={{ fontSize: "16px" }}>{greetingIcon}</span>
+            <span style={{ color: "#64748B", fontSize: "13px", fontWeight: "600" }}>{greeting}</span>
           </div>
-        </motion.div>
-
-        {/* Premium Achievements & Streaks Card */}
-        <motion.div 
-          className="dash-card" 
-          variants={itemVariants} 
-          style={{ 
-            marginBottom: "16px",
-            border: `1px solid ${c.border}`,
-            background: `linear-gradient(135deg, ${c.bgCard} 0%, ${c.bg} 100%)`,
-            boxShadow: "0 10px 25px -5px rgba(0,0,0,0.03)"
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "4px" }}>
-            <span style={{ fontSize: "20px" }}>🏆</span>
-            <h3 style={{ margin: 0, color: c.text, fontSize: "16px", fontWeight: "800", letterSpacing: "-0.2px" }}>
-              Achievements & Streaks
-            </h3>
-          </div>
-          <p style={{ color: c.textMuted, marginBottom: "14px", fontSize: "13px", marginTop: 0 }}>
-            Students love seeing consistent metrics! Keep your performance high.
+          <h1 className="dashboard-title" style={{ color: isDark ? "#F8FAFC" : "#0F172A", fontSize: "24px", fontWeight: "800", margin: "0 0 6px", letterSpacing: "-0.02em" }}>
+            Welcome back, {user?.name || "Student"}! 👋
+          </h1>
+          <p style={{ color: "#64748B", fontSize: "13px", margin: "0 0 16px", lineHeight: "1.5" }}>
+            {loading ? "Fetching latest statistics..." : 
+              `You have ${stats?.pendingTasks || 0} pending task${stats?.pendingTasks !== 1 ? "s" : ""} and ${stats?.totalNotes || 0} notes saved.`
+            }
           </p>
-
-          <div style={{
-            display: "grid", 
-            gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", 
-            gap: "10px"
-          }}>
-            {/* Streak Sub-Card */}
-            <motion.div 
-              whileHover={{ y: -5, scale: 1.02, boxShadow: "0 12px 20px -8px rgba(239, 68, 68, 0.15)" }}
-              whileTap={{ scale: 0.98 }}
-              style={{
-                display: "flex", alignItems: "center", gap: "10px", padding: "12px 10px",
-                borderRadius: "14px", background: c.bgCard, border: `1px solid ${c.border}`,
-                boxShadow: "0 4px 10px rgba(0,0,0,0.01)", cursor: "pointer", transition: "border-color 0.2s"
-              }}
-            >
-              <div style={{
-                width: "38px", height: "38px", borderRadius: "10px", background: "rgba(239, 68, 68, 0.1)",
-                display: "flex", alignItems: "center", justifyContent: "center", fontSize: "18px", flexShrink: 0
-              }}>
-                🔥
-              </div>
-              <div style={{ minWidth: 0 }}>
-                <p style={{ margin: 0, fontSize: "11px", fontWeight: "600", color: c.textMuted, textTransform: "uppercase", letterSpacing: "0.3px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Streak</p>
-                <p style={{ margin: "1px 0 0 0", fontSize: "16px", fontWeight: "800", color: "#EF4444" }}>5 days</p>
-              </div>
-            </motion.div>
-
-            {/* Notes Created Sub-Card */}
-            <motion.div 
-              whileHover={{ y: -5, scale: 1.02, boxShadow: "0 12px 20px -8px rgba(99, 102, 241, 0.15)" }}
-              whileTap={{ scale: 0.98 }}
-              style={{
-                display: "flex", alignItems: "center", gap: "10px", padding: "12px 10px",
-                borderRadius: "14px", background: c.bgCard, border: `1px solid ${c.border}`,
-                boxShadow: "0 4px 10px rgba(0,0,0,0.01)", cursor: "pointer", transition: "border-color 0.2s"
-              }}
-            >
-              <div style={{
-                width: "38px", height: "38px", borderRadius: "10px", background: "rgba(99, 102, 241, 0.1)",
-                display: "flex", alignItems: "center", justifyContent: "center", fontSize: "18px", flexShrink: 0
-              }}>
-                📝
-              </div>
-              <div style={{ minWidth: 0 }}>
-                <p style={{ margin: 0, fontSize: "11px", fontWeight: "600", color: c.textMuted, textTransform: "uppercase", letterSpacing: "0.3px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Notes</p>
-                <p style={{ margin: "1px 0 0 0", fontSize: "16px", fontWeight: "800", color: "#6366F1" }}>
-                  {loading ? "—" : <AnimatedCounter to={stats?.totalNotes} />}
-                </p>
-              </div>
-            </motion.div>
-
-            {/* Tasks Finished Sub-Card */}
-            <motion.div 
-              whileHover={{ y: -5, scale: 1.02, boxShadow: "0 12px 20px -8px rgba(16, 185, 129, 0.15)" }}
-              whileTap={{ scale: 0.98 }}
-              style={{
-                display: "flex", alignItems: "center", gap: "10px", padding: "12px 10px",
-                borderRadius: "14px", background: c.bgCard, border: `1px solid ${c.border}`,
-                boxShadow: "0 4px 10px rgba(0,0,0,0.01)", cursor: "pointer", transition: "border-color 0.2s"
-              }}
-            >
-              <div style={{
-                width: "38px", height: "38px", borderRadius: "10px", background: "rgba(16, 185, 129, 0.1)",
-                display: "flex", alignItems: "center", justifyContent: "center", fontSize: "18px", flexShrink: 0
-              }}>
-                ✅
-              </div>
-              <div style={{ minWidth: 0 }}>
-                <p style={{ margin: 0, fontSize: "11px", fontWeight: "600", color: c.textMuted, textTransform: "uppercase", letterSpacing: "0.3px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Finished</p>
-                <p style={{ margin: "1px 0 0 0", fontSize: "16px", fontWeight: "800", color: "#10B981" }}>
-                  {loading ? "—" : <AnimatedCounter to={stats?.completedTasks} />}
-                </p>
-              </div>
-            </motion.div>
-          </div>
-        </motion.div>
-
-        {/* Analytics Summary Stats Grid */}
-        <div className="stats-responsive-grid">
-          {[
-            { label: "Total Notes", value: stats?.totalNotes ?? 0, icon: "📝", color: "#6366F1", bg: "#6366F115" },
-            { label: "This Week", value: stats?.notesThisWeek ?? 0, icon: "✨", color: "#06B6D4", bg: "#06B6D415" },
-            { label: "Completed", value: stats?.completedTasks ?? 0, icon: "✅", color: "#10B981", bg: "#10B98115" },
-            { label: "Pending Loops", value: stats?.pendingTasks ?? 0, icon: "⏳", color: "#F59E0B", bg: "#F59E0B15" },
-          ].map((s, idx) => (
-            <motion.div 
-              key={idx} 
-              className="stat-card"
-              variants={itemVariants}
-              whileHover={{ y: -4, transition: { duration: 0.2 } }}
-            >
-              <div style={{
-                width: 34, height: 34, borderRadius: "8px", background: s.bg,
-                display: "flex", alignItems: "center", justifyContent: "center", fontSize: "15px", flexShrink: 0,
-              }}>
-                {s.icon}
-              </div>
-              <div style={{ minWidth: 0 }}>
-                <p style={{ margin: 0, fontSize: "18px", fontWeight: "800", color: s.color, lineHeight: 1.2 }}>
-                  {loading ? "—" : <AnimatedCounter to={s.value} />}
-                </p>
-                <p style={{ margin: "1px 0 0 0", fontSize: "11px", fontWeight: "500", color: c.textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {s.label}
-                </p>
-              </div>
-            </motion.div>
-          ))}
-        </div>
-
-        {/* Core Middle Dynamic Split Layout */}
-        <div className="responsive-grid-2col">
-          
-          {/* Study Analytics Card */}
-          <motion.div className="dash-card" variants={itemVariants}>
-            <div style={{ display: "flex", flexDirection: "column", marginBottom: "12px" }}>
-              <h3 style={{ color: c.text, fontSize: "16px", fontWeight: "800", margin: 0, display: "flex", alignItems: "center", gap: "6px" }}>
-                📊 Study Analytics
-              </h3>
-              <p style={{ color: c.textMuted, marginTop: 4, marginBottom: 0, fontSize: "13px" }}>
-                You're making great progress this week 🚀 
-                <span style={{ display: "block", fontSize: "12px", fontWeight: "600", marginTop: "2px", color: c.accent }}>
-                  {taskProgress}% of your study goals completed.
-                </span>
-              </p>
-            </div>
-
-            <div className="progress-visualization-wrapper">
-              
-              {/* Overall Progress Element */}
-              <div className="ring-element-container">
-                <div className="ring-element-box">
-                  <svg width="100%" height="100%" viewBox="0 0 100 100">
-                    <defs>
-                      <linearGradient id="overallGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" stopColor="#6366F1" />
-                        <stop offset="100%" stopColor="#2563EB" />
-                      </linearGradient>
-                    </defs>
-                    <circle cx="50" cy="50" r="42" stroke={c.border} strokeWidth="8" fill="transparent" />
-                    <motion.circle 
-                      cx="50" cy="50" r="42" stroke="url(#overallGrad)" strokeWidth="8" fill="transparent"
-                      strokeDasharray="263.89"
-                      initial={{ strokeDashoffset: 263.89 }}
-                      animate={{ strokeDashoffset: 263.89 - (263.89 * taskProgress) / 100 }}
-                      transition={{ duration: 1, ease: "easeOut" }}
-                      strokeLinecap="round"
-                      transform="rotate(-90 50 50)"
-                    />
-                  </svg>
-                  <div style={{
-                    position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
-                    display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center"
-                  }}>
-                    <span style={{ fontWeight: "850", fontSize: "20px", color: c.text }}>{taskProgress}%</span>
-                  </div>
-                </div>
-                <div>
-                  <h4 className="ring-meta-title">Overall Progress</h4>
-                  <p className="ring-meta-sub">+12% this week</p>
-                </div>
-              </div>
-
-              {/* Today's Target Progress Element */}
-              <div className="ring-element-container">
-                <div className="ring-element-box">
-                  <svg width="100%" height="100%" viewBox="0 0 100 100">
-                    <defs>
-                      <linearGradient id="todayGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" stopColor="#10B981" />
-                        <stop offset="100%" stopColor="#22C55E" />
-                      </linearGradient>
-                    </defs>
-                    <circle cx="50" cy="50" r="42" stroke={c.border} strokeWidth="8" fill="transparent" />
-                    <motion.circle 
-                      cx="50" cy="50" r="42" stroke="url(#todayGrad)" strokeWidth="8" fill="transparent"
-                      strokeDasharray="263.89"
-                      initial={{ strokeDashoffset: 263.89 }}
-                      animate={{ strokeDashoffset: 263.89 - (263.89 * todayProgress) / 100 }}
-                      transition={{ duration: 1, ease: "easeOut", delay: 0.1 }}
-                      strokeLinecap="round"
-                      transform="rotate(-90 50 50)"
-                    />
-                  </svg>
-                  <div style={{
-                    position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
-                    display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center"
-                  }}>
-                    <span style={{ fontWeight: "850", fontSize: "20px", color: "#10B981" }}>{todayProgress}%</span>
-                  </div>
-                </div>
-                <div>
-                  <h4 className="ring-meta-title">Today's Goal</h4>
-                  <p className="ring-meta-sub">{todayProgress === 100 ? "Completed 🎉" : "In progress"}</p>
-                </div>
-              </div>
-
-            </div>
-
-            {/* Bottom Status Grid */}
-            <div className="bottom-stats-grid">
-              <div className="mini-status-card">
-                <p style={{ margin: 0, fontSize: "15px", fontWeight: "800", color: "#10B981" }}>✅ {stats?.completedTasks ?? 0}</p>
-                <p style={{ margin: "2px 0 0 0", fontSize: "11px", fontWeight: "600", color: c.textMuted }}>Done</p>
-              </div>
-              <div className="mini-status-card">
-                <p style={{ margin: 0, fontSize: "15px", fontWeight: "800", color: "#f39c06" }}>⏳ {stats?.pendingTasks ?? 0}</p>
-                <p style={{ margin: "2px 0 0 0", fontSize: "11px", fontWeight: "600", color: c.textMuted }}>Pending</p>
-              </div>
-              <div className="mini-status-card">
-                <p style={{ margin: 0, fontSize: "15px", fontWeight: "800", color: c.accent }}>🎯 {stats?.todayTasksCount ?? 0}</p>
-                <p style={{ margin: "2px 0 0 0", fontSize: "11px", fontWeight: "600", color: c.textMuted }}>Today</p>
-              </div>
-            </div>
-
-            <p style={{ margin: "16px 0 0 0", textAlign: "center", fontSize: "12px", fontWeight: "700", color: c.text }}>
-              🔥 Keep going! You're {taskProgress}% through your goals.
-            </p>
-          </motion.div>
-
-          {/* Quick Actions Engine Container */}
-          <motion.div className="dash-card" variants={itemVariants}>
-            <h3 style={{ color: c.text, fontSize: "16px", fontWeight: "800", margin: "0 0 12px 0", display: "flex", alignItems: "center", gap: "6px" }}>
-              ⚡ Engine Operations
-            </h3>
-            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+          {/* Mini Inline Stats Badges */}
+          {stats && (
+            <div className="mini-stats">
               {[
-                { icon: "📝", label: "Create Study Note", path: "/notes" },
-                { icon: "📅", label: "Open Planner Engine", path: "/planner" },
-                { icon: "🤖", label: "Consult AI Copilot", path: "/ai-tutor" },
-                { icon: "🎮", label: "Enter Arena Challenge", path: "/quiz-arena" },
-              ].map((a) => (
-                <motion.button 
-                  key={a.label} 
-                  className="quick-btn" 
-                  onClick={() => navigate(a.path)}
-                  whileHover={{ x: 4, borderColor: c.accent, background: `${c.accent}04` }}
-                  whileTap={{ scale: 0.99 }}
-                >
-                  <div style={{
-                    width: 30, height: 30, borderRadius: 8, background: `${c.accent}12`,
-                    display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0
-                  }}>
-                    {a.icon}
-                  </div>
-                  <div style={{ minWidth: 0, flex: 1 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: c.text, textAlign: "left", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {a.label}
-                    </div>
-                  </div>
-                  <span style={{ fontSize: "12px", color: c.textMuted }}>→</span>
-                </motion.button>
+                { label: "Notes", val: stats.totalNotes, color: "#2563EB" },
+                { label: "Done", val: stats.completedTasks, color: "#10B981" },
+                { label: "Pending", val: stats.pendingTasks, color: "#F59E0B" },
+                { label: "This Week", val: stats.notesThisWeek, color: "#6366F1" },
+              ].map((s) => (
+                <div key={s.label} className="mini-stat-badge">
+                  <span style={{ color: s.color, fontSize: "13px", fontWeight: "700" }}>{s.val}</span>
+                  <span style={{ color: "#64748B", fontSize: "11px", fontWeight: "500" }}>{s.label}</span>
+                </div>
               ))}
             </div>
-          </motion.div>
+          )}
+          {/* Action Header Buttons */}
+          <div className="header-actions">
+            <button
+              onClick={() => navigate("/notes")}
+              style={{
+                padding: "8px 16px",
+                background: "#6366F1",
+                color: "#FFFFFF",
+                border: "none",
+                borderRadius: "8px",
+                fontSize: "13px",
+                fontWeight: "600",
+                cursor: "pointer",
+                boxShadow: "0 2px 4px rgba(99,102,241,0.2)",
+                transition: "background 0.15s ease"
+              }}
+            >
+              📝 New Note
+            </button>
+            <button
+              onClick={() => navigate("/quiz-arena")}
+              style={{
+                padding: "8px 16px",
+                background: isDark ? "rgba(255,255,255,0.05)" : "#FFFFFF",
+                color: isDark ? "#F8FAFC" : "#0F172A",
+                border: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "#E2E8F0"}`,
+                borderRadius: "8px",
+                fontSize: "13px",
+                fontWeight: "600",
+                cursor: "pointer",
+                transition: "all 0.15s ease"
+              }}
+            >
+              🎮 Take a Quiz
+            </button>
+          </div>
+        </div>
+        {/* ── 2. KPI METRIC CARDS ── */}
+        <div className="kpi-grid">
+          {loading ? (
+            [1, 2, 3, 4].map(i => <div key={i} className="skeleton" style={{ height: "100px", borderRadius: "14px" }} />)
+          ) : (
+            <>
+              <StatCard
+                label="Total Notes"
+                target={stats?.totalNotes ?? 0}
+                icon="📝"
+                color="#2563EB"
+                onClick={() => navigate("/notes")}
+                delay={0}
+              />
+              <StatCard
+                label="Notes This Week"
+                target={stats?.notesThisWeek ?? 0}
+                icon="✨"
+                color="#6366F1"
+                onClick={() => navigate("/notes")}
+                delay={40}
+              />
+              <StatCard
+                label="Tasks Completed"
+                target={stats?.completedTasks ?? 0}
+                icon="✅"
+                color="#10B981"
+                onClick={() => navigate("/planner")}
+                delay={80}
+              />
+              <StatCard
+                label="Pending Tasks"
+                target={stats?.pendingTasks ?? 0}
+                icon="⏳"
+                color="#F59E0B"
+                onClick={() => navigate("/planner")}
+                delay={120}
+              />
+            </>
+          )}
+        </div>
+        {/* ── 3. MIDDLE ROW: STUDY PROGRESS + QUICK ACTIONS ── */}
+        <div className="middle-grid">
+          
+          {/* Study Progress Card */}
+          <div className="dash-card">
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <span style={{ fontSize: "18px" }}>📊</span>
+                <h3 style={{ color: isDark ? "#F8FAFC" : "#0F172A", fontSize: "16px", fontWeight: "700", margin: 0 }}>
+                  Study Progress
+                </h3>
+              </div>
+              <button className="view-btn" onClick={() => navigate("/analytics")}>
+                Analytics →
+              </button>
+            </div>
+            <div className="progress-main">
+              <div style={{ position: "relative", width: 116, height: 116, flexShrink: 0 }}>
+                <svg
+                  width="116"
+                  height="116"
+                  viewBox="0 0 116 116"
+                  style={{ transform: "rotate(-90deg)", overflow: "visible" }}
+                >
+                  <circle
+                    cx="58"
+                    cy="58"
+                    r={RING_R}
+                    fill="none"
+                    stroke={isDark ? "rgba(255,255,255,0.06)" : "#F1F5F9"}
+                    strokeWidth="10"
+                  />
+                  <circle
+                    cx="58"
+                    cy="58"
+                    r={RING_R}
+                    fill="none"
+                    stroke="#6366F1"
+                    strokeWidth="10"
+                    strokeDasharray={RING_CIRC}
+                    strokeDashoffset={strokeOffset}
+                    strokeLinecap="round"
+                    style={{ transition: "stroke-dashoffset 0.8s cubic-bezier(0.4, 0, 0.2, 1)" }}
+                  />
+                </svg>
+                <div style={{
+                  position: "absolute",
+                  inset: 0,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexDirection: "column"
+                }}>
+                  <span style={{ fontSize: "20px", fontWeight: "800", color: "#6366F1", lineHeight: 1 }}>
+                    {taskProgress}%
+                  </span>
+                  <span style={{ fontSize: "10px", fontWeight: "700", color: "#94A3B8", letterSpacing: "0.05em", marginTop: "3px" }}>
+                    TASKS
+                  </span>
+                </div>
+              </div>
+              <div className="progress-details" style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
+                    <span style={{ fontSize: "13px", fontWeight: "500", color: isDark ? "#94A3B8" : "#64748B" }}>Overall tasks</span>
+                    <span style={{ fontSize: "13px", fontWeight: "700", color: "#6366F1" }}>{taskProgress}%</span>
+                  </div>
+                  <div style={{ height: "8px", borderRadius: "10px", background: isDark ? "rgba(255,255,255,0.06)" : "#F1F5F9", overflow: "hidden" }}>
+                    <div style={{ width: `${taskProgress}%`, height: "100%", background: "#6366F1", borderRadius: "10px", transition: "width 0.8s ease" }} />
+                  </div>
+                </div>
+                <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
+                    <span style={{ fontSize: "13px", fontWeight: "500", color: isDark ? "#94A3B8" : "#64748B" }}>Today's tasks</span>
+                    <span style={{ fontSize: "13px", fontWeight: "700", color: "#10B981" }}>{todayCompleted}/{todayTotal}</span>
+                  </div>
+                  <div style={{ height: "8px", borderRadius: "10px", background: isDark ? "rgba(255,255,255,0.06)" : "#F1F5F9", overflow: "hidden" }}>
+                    <div style={{ width: `${todayProgress}%`, height: "100%", background: "#10B981", borderRadius: "10px", transition: "width 0.8s ease" }} />
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="study-summary">
+              <div onClick={() => navigate("/planner")} style={{ background: isDark ? "rgba(255,255,255,0.02)" : "#F8FAFC", border: `1px solid ${isDark ? "rgba(255,255,255,0.05)" : "#F1F5F9"}`, borderRadius: "12px", padding: "12px", textAlign: "center", cursor: "pointer" }}>
+                <p style={{ margin: "0 0 2px 0", fontSize: "22px", fontWeight: "800", color: "#10B981", lineHeight: 1.1 }}>{stats?.completedTasks ?? 0}</p>
+                <span style={{ fontSize: "12px", fontWeight: "600", color: isDark ? "#94A3B8" : "#64748B" }}>Done</span>
+              </div>
+              <div onClick={() => navigate("/planner")} style={{ background: isDark ? "rgba(255,255,255,0.02)" : "#F8FAFC", border: `1px solid ${isDark ? "rgba(255,255,255,0.05)" : "#F1F5F9"}`, borderRadius: "12px", padding: "12px", textAlign: "center", cursor: "pointer" }}>
+                <p style={{ margin: "0 0 2px 0", fontSize: "22px", fontWeight: "800", color: "#EAB308", lineHeight: 1.1 }}>{stats?.pendingTasks ?? 0}</p>
+                <span style={{ fontSize: "12px", fontWeight: "600", color: isDark ? "#94A3B8" : "#64748B" }}>Pending</span>
+              </div>
+              <div onClick={() => navigate("/notes")} style={{ background: isDark ? "rgba(255,255,255,0.02)" : "#F8FAFC", border: `1px solid ${isDark ? "rgba(255,255,255,0.05)" : "#F1F5F9"}`, borderRadius: "12px", padding: "12px", textAlign: "center", cursor: "pointer" }}>
+                <p style={{ margin: "0 0 2px 0", fontSize: "22px", fontWeight: "800", color: "#6366F1", lineHeight: 1.1 }}>{stats?.totalNotes ?? 0}</p>
+                <span style={{ fontSize: "12px", fontWeight: "600", color: isDark ? "#94A3B8" : "#64748B" }}>Notes</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Actions Grid */}
+          <div className="dash-card">
+            <h3 style={{ color: isDark ? "#F8FAFC" : "#0F172A", fontSize: "16px", fontWeight: "700", margin: "0 0 16px" }}>⚡ Quick Actions</h3>
+            <div className="quick-actions-grid">
+              {QUICK_ACTIONS.map((a) => (
+                <button key={a.label} className="quick-btn" onClick={() => navigate(a.path)}>
+                  <div style={{ width: 34, height: 34, borderRadius: "8px", background: `${a.color}12`, color: a.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "15px", flexShrink: 0 }}>
+                    {a.icon}
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <p style={{ margin: 0, fontSize: "12px", fontWeight: "600", color: isDark ? "#F8FAFC" : "#0F172A" }}>{a.label}</p>
+                    <p style={{ margin: 0, fontSize: "10px", color: "#64748B" }}>{a.desc}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
 
-        {/* Secondary Downstream Core Feeds Layout */}
-        <div className="responsive-grid-2col">
-          
-          {/* Recent Study Documents List Stream */}
-          <motion.div className="dash-card" variants={itemVariants}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-              <h3 style={{ color: c.text, fontSize: "15px", fontWeight: "800", margin: 0 }}>📝 Recent Knowledge Cache</h3>
-              <span onClick={() => navigate("/notes")} style={{ color: c.accent, fontSize: "12px", fontWeight: "600", cursor: "pointer" }}>
-                View Feed
-              </span>
+        {/* ── 4. BOTTOM GRID ── */}
+        <div className="bottom-grid">
+          {/* Recent Notes Section */}
+          <div className="dash-card">
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
+              <h3 style={{ color: isDark ? "#F8FAFC" : "#0F172A", fontSize: "15px", fontWeight: "700", margin: 0 }}>📝 Recent Notes</h3>
+              <button className="view-btn" onClick={() => navigate("/notes")}>View all →</button>
             </div>
-
-            <div style={{ display: "flex", flexDirection: "column" }}>
-              {loading ? (
-                <p style={{ color: c.textMuted, fontSize: "13px" }}>Accessing core buffer...</p>
-              ) : !stats?.recentNotes?.length ? (
-                <div style={{ textAlign: "center", padding: "20px 0" }}>
-                  <p style={{ fontSize: "22px", margin: "0 0 4px 0" }}>📁</p>
-                  <p style={{ color: c.textMuted, fontSize: "12px", margin: 0 }}>Knowledge pipeline empty</p>
-                </div>
-              ) : (
-                stats.recentNotes.map((note) => (
-                  <motion.div 
-                    key={note._id} 
-                    className="recent-item" 
-                    onClick={() => navigate("/notes")}
-                    whileHover={{ paddingLeft: 4 }}
-                    transition={{ duration: 0.15 }}
-                  >
-                    <div style={{
-                      width: 30, height: 30, borderRadius: "6px", background: `${c.accent}12`,
-                      display: "flex", alignItems: "center", justifyContent: "center", fontSize: "13px", flexShrink: 0
-                    }}>📝</div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ margin: 0, fontSize: "13px", fontWeight: "600", color: c.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {note.title}
-                      </p>
-                      <p style={{ margin: "1px 0 0 0", fontSize: "11px", color: c.textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {stripHtml(note.content) || "No document configuration parameters"}
-                      </p>
-                    </div>
-                    <span style={{ fontSize: "11px", color: c.textFaint, flexShrink: 0, marginLeft: "6px" }}>
-                      {new Date(note.updatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                    </span>
-                  </motion.div>
-                ))
-              )}
-            </div>
-          </motion.div>
-
-          {/* Upcoming Planner Queue Stream */}
-          <motion.div className="dash-card" variants={itemVariants}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-              <h3 style={{ color: c.text, fontSize: "15px", fontWeight: "800", margin: 0 }}>📅 Planner Timelines Queue</h3>
-              <span onClick={() => navigate("/planner")} style={{ color: c.accent, fontSize: "12px", fontWeight: "600", cursor: "pointer" }}>
-                View Stack
-              </span>
-            </div>
-
-            <div style={{ display: "flex", flexDirection: "column" }}>
-              {loading ? (
-                <p style={{ color: c.textMuted, fontSize: "13px" }}>Reaching task manifest schedules...</p>
-              ) : !stats?.upcomingTasks?.length ? (
-                <div style={{ textAlign: "center", padding: "20px 0" }}>
-                  <p style={{ fontSize: "22px", margin: "0 0 4px 0" }}>🏁</p>
-                  <p style={{ color: c.textMuted, fontSize: "12px", margin: 0 }}>No pending blockages detected</p>
-                </div>
-              ) : (
-                stats.upcomingTasks.map((task) => (
-                  <div key={task._id} className="task-item">
-                    <div style={{ width: "4px", height: "24px", borderRadius: "2px", background: PRIORITY_COLORS[task.priority] || PRIORITY_COLORS.medium, flexShrink: 0 }} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ margin: 0, fontSize: "13px", fontWeight: "600", color: c.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {task.title}
-                      </p>
-                      <p style={{ margin: "1px 0 0 0", fontSize: "11px", color: c.textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {task.subject} · {formatDate(task.date)}
-                      </p>
-                    </div>
-                    <span style={{
-                      fontSize: "10px", padding: "2px 6px", borderRadius: "20px", fontWeight: "600", flexShrink: 0, marginLeft: "6px",
-                      color: PRIORITY_COLORS[task.priority] || PRIORITY_COLORS.medium,
-                      background: `${PRIORITY_COLORS[task.priority] || PRIORITY_COLORS.medium}14`,
-                      textTransform: "capitalize"
-                    }}>
-                      {task.priority}
-                    </span>
+            {loading ? (
+              [1, 2, 3].map(i => (
+                <div key={i} style={{ display: "flex", gap: "10px", marginBottom: "10px" }}>
+                  <div className="skeleton" style={{ width: 32, height: 32, flexShrink: 0 }} />
+                  <div style={{ flex: 1 }}>
+                    <div className="skeleton" style={{ height: 12, marginBottom: 4, width: "60%" }} />
+                    <div className="skeleton" style={{ height: 10, width: "40%" }} />
                   </div>
-                ))
-              )}
+                </div>
+              ))
+            ) : !stats?.recentNotes?.length ? (
+              <div style={{ textAlign: "center", padding: "20px 0" }}>
+                <p style={{ color: "#64748B", fontSize: "12px", margin: "0 0 8px" }}>No notes saved yet.</p>
+                <button onClick={() => navigate("/notes")} className="view-btn">Create first note →</button>
+              </div>
+            ) : (
+              stats.recentNotes.map(note => (
+                <div key={note._id} className="recent-row" onClick={() => navigate("/notes")}>
+                  <div style={{ width: 32, height: 32, borderRadius: "8px", background: "rgba(37,99,235,0.08)", color: "#2563EB", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "14px", flexShrink: 0 }}>
+                    📝
+                  </div>
+                  <div className="recent-row-content">
+                    <p className="recent-row-title" style={{ margin: 0, fontSize: "13px", fontWeight: "600", color: isDark ? "#F8FAFC" : "#0F172A" }}>{note.title}</p>
+                    <p className="recent-row-description" style={{ margin: 0, fontSize: "11px", color: "#64748B" }}>{stripHtml(note.content) || "No content"}</p>
+                  </div>
+                  <div className="recent-row-meta">
+                    <span style={{ fontSize: "10px", color: "#2563EB", background: "rgba(37,99,235,0.08)", padding: "1px 6px", borderRadius: "10px", fontWeight: "600" }}>{note.subject}</span>
+                    <span style={{ fontSize: "10px", color: "#64748B" }}>{new Date(note.updatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* 🎯 OPTIMIZED COMPACT UPCOMING TASKS SECTION */}
+          <div className="dash-card upcoming-tasks-card">
+            {/* Reduced Header Container */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "14px" }}>
+              <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                <div style={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: "10px",
+                  background: isDark ? "rgba(99, 102, 241, 0.12)" : "#EEF2FF",
+                  color: "#6366F1",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: "16px"
+                }}>
+                  📅
+                </div>
+                <div>
+                  <h3 style={{ color: isDark ? "#F8FAFC" : "#0F172A", fontSize: "15px", fontWeight: "700", margin: 0 }}>
+                    Upcoming Tasks
+                  </h3>
+                  <p style={{ margin: "1px 0 0", fontSize: "11px", color: "#64748B" }}>
+                    Stay on track with your planned tasks
+                  </p>
+                </div>
+              </div>
+              <button className="view-btn" onClick={() => navigate("/planner")} style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                View all <span style={{ fontSize: "13px" }}>→</span>
+              </button>
             </div>
-          </motion.div>
-          
-        </div> 
-      </motion.div>
+            {/* Task Items List (Max 3 Items) */}
+            {loading ? (
+              [1, 2, 3].map(i => (
+                <div key={i} className="skeleton" style={{ height: "42px", borderRadius: "10px", marginBottom: "6px" }} />
+              ))
+            ) : !stats?.upcomingTasks?.length ? (
+              <div style={{ textAlign: "center", padding: "20px 0" }}>
+                <p style={{ color: "#64748B", fontSize: "12px", margin: "0 0 8px" }}>No upcoming tasks planned.</p>
+                <button onClick={() => navigate("/planner")} className="view-btn">Plan your study →</button>
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column" }}>
+                {stats.upcomingTasks.slice(0, 3).map(task => {
+                  const color = PRIORITY_COLORS[task.priority] || "#F59E0B";
+                  return (
+                    <div
+                      key={task._id}
+                      className="task-card-item"
+                      onClick={() => navigate("/planner")}
+                      onMouseMove={(e) => {
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        e.currentTarget.style.setProperty("--mouse-x", `${e.clientX - rect.left}px`);
+                        e.currentTarget.style.setProperty("--mouse-y", `${e.clientY - rect.top}px`);
+                      }}
+                    >
+                      {/* Left Priority Accent Bar */}
+                      <div style={{
+                        position: "absolute",
+                        left: 0,
+                        top: 0,
+                        bottom: 0,
+                        width: "3px",
+                        background: color,
+                        borderTopLeftRadius: "10px",
+                        borderBottomLeftRadius: "10px"
+                      }} />
+                      {/* Content Section */}
+                      <div className="task-content">
+                        <div style={{
+                          width: "16px",
+                          height: "16px",
+                          borderRadius: "50%",
+                          border: `2px solid ${isDark ? "#475569" : "#CBD5E1"}`,
+                          background: "transparent",
+                          flexShrink: 0
+                        }} />
+                        <div className="task-text">
+                          <p className="task-title" style={{
+                            margin: 0,
+                            fontSize: "13px",
+                            fontWeight: "600",
+                            color: isDark ? "#F8FAFC" : "#1E293B",
+                            letterSpacing: "-0.01em"
+                          }}>
+                            {task.title}
+                          </p>
+                          <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "2px", fontSize: "11px", color: "#64748B" }}>
+                            <span style={{ display: "flex", alignItems: "center", gap: "3px" }}>
+                              📂 {task.subject}
+                            </span>
+                            <span>•</span>
+                            <span style={{ display: "flex", alignItems: "center", gap: "3px", color: isDark ? "#A5B4FC" : "#6366F1", fontWeight: "500" }}>
+                              📅 {formatDate(task.date)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      {/* Right Tag + Arrow */}
+                      <div className="task-meta">
+                        <span className="task-priority" style={{
+                          fontSize: "10px",
+                          fontWeight: "600",
+                          color: color,
+                          background: `${color}14`,
+                          padding: "2px 8px",
+                          borderRadius: "12px",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "4px",
+                          textTransform: "capitalize"
+                        }}>
+                          <span style={{ width: "5px", height: "5px", borderRadius: "50%", background: color }} />
+                          {task.priority}
+                        </span>
+                        <span className="task-arrow" style={{
+                          color: isDark ? "#64748B" : "#94A3B8",
+                          fontSize: "13px",
+                          fontWeight: "700",
+                          transition: "transform 0.2s ease, color 0.2s ease"
+                        }}>
+                          ›
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            {/* Minimized Bottom Encouragement Badge */}
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "6px",
+              marginTop: "10px",
+              paddingTop: "8px",
+              borderTop: `1px dashed ${isDark ? "rgba(255,255,255,0.06)" : "#F1F5F9"}`
+            }}>
+              <div style={{
+                width: "16px",
+                height: "16px",
+                borderRadius: "50%",
+                background: isDark ? "rgba(99, 102, 241, 0.15)" : "#EEF2FF",
+                color: "#6366F1",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "10px"
+              }}>
+                ✨
+              </div>
+              <span style={{ fontSize: "11px", fontWeight: "500", color: "#64748B" }}>
+                Keep going! You're building something great.
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
     </Layout>
   );
 }
-
-export default Dashboard;
