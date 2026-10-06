@@ -24,6 +24,8 @@ const Task = require("./models/Task");
 
 const app = express();
 
+app.set("trust proxy", 1);
+
 // ==============================
 // Rate Limit Security
 // ==============================
@@ -307,7 +309,7 @@ app.put("/api/user/change-password", protect, async (req, res) => {
       });
     }
 
-    const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[@$!%*#?&])[A-Za-z\d@$!%*#?&]{8,}$/;
+    const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[@$!%*#?&])[A-Za-z\d@$!\%*#?&]{8,}$/;
     if (!passwordRegex.test(newPassword)) {
       return res.status(400).json({
         success: false,
