@@ -1,23 +1,40 @@
-const { Resend } = require("resend");
+const { BrevoClient } = require("@getbrevo/brevo");
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const brevo = new BrevoClient({
+    apiKey: process.env.BREVO_API_KEY
+});
 
 const sendEmail = async (options) => {
-    const { data, error } = await resend.emails.send({
-        from: "Studora AI <onboarding@resend.dev>",
-        to: options.email,
-        subject: options.subject,
-        html: options.message
-    });
+    try {
+        const result = await brevo.transactionalEmails.sendTransacEmail({
+            subject: options.subject,
 
-    if (error) {
-        console.error("RESEND EMAIL ERROR:", error);
-        throw new Error(error.message || "Failed to send email");
+            htmlContent: options.message,
+
+            sender: {
+                name: "Studora AI",
+                email: process.env.BREVO_SENDER_EMAIL
+            },
+
+            to: [
+                {
+                    email: options.email
+                }
+            ]
+        });
+
+        console.log("BREVO EMAIL SENT:", result);
+
+        return result;
+
+    } catch (error) {
+        console.error(
+            "BREVO EMAIL ERROR:",
+            error.body || error.message || error
+        );
+
+        throw new Error("Failed to send email");
     }
-
-    console.log("RESEND EMAIL SENT:", data);
-
-    return data;
 };
 
 module.exports = sendEmail;
