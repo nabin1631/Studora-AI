@@ -21,11 +21,7 @@ const generateToken = (id) => {
 
 // Generate OTP
 const generateOTP = () => {
-
-    return Math.floor(
-        100000 + Math.random() * 900000
-    ).toString();
-
+    return crypto.randomInt(100000, 1000000).toString();
 };
 
 
@@ -465,16 +461,12 @@ const forgotPassword = async(req,res)=>{
 
 
 
-        if(!user)
-        {
-            return res.status(404).json({
-
-                success:false,
-
-                message:"User not found"
-
-            });
-        }
+       if (!user) {
+    return res.status(200).json({
+        success: true,
+        message: "If an account exists for this email, reset instructions will be sent."
+    });
+}
 
 
 
