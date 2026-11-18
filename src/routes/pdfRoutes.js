@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const multer = require("multer");
 const path = require("path");
+const fs = require("fs");
 
 const {
     uploadPdf,
@@ -28,11 +29,13 @@ const pdfAiLimiter = rateLimit({
     }
 });
 
-// Multer config
+// Ensure upload directory exists
+const uploadDir = path.join(__dirname, "../../uploads");
+fs.mkdirSync(uploadDir, { recursive: true });
 const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, "uploads/");
-    },
+   destination: (req, file, cb) => {
+    cb(null, uploadDir);
+},
     filename: (req, file, cb) => {
         const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
         cb(null, `${unique}${path.extname(file.originalname)}`);
