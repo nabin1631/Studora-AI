@@ -22,17 +22,12 @@ const sendEmail = async (options) => {
                 }
             ]
         });
-
-        console.log("BREVO EMAIL SENT:", result);
+        console.log("Brevo email sent successfully");
 
         return result;
 
     } catch (error) {
-        console.error(
-            "BREVO EMAIL ERROR:",
-            error.body || error.message || error
-        );
-
+        console.error("Brevo email delivery failed");
         throw new Error("Failed to send email");
     }
 };

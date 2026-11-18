@@ -101,9 +101,14 @@ export default function QuizArena() {
   const isDark = mode === "dark";
 
   // Core React State
-  const [screen, setScreen] = useState("home"); // home|playing|result
-  const [stats, setStats] = useState(null);
-  const [loadingStats, setLoadingStats] = useState(true);
+ const [screen, setScreen] = useState("home"); // home|community|playing|result
+const [stats, setStats] = useState(null);
+const [loadingStats, setLoadingStats] = useState(true);
+
+// Community Quiz State
+const [communityQuizzes, setCommunityQuizzes] = useState([]);
+const [loadingCommunity, setLoadingCommunity] = useState(false);
+const [communityError, setCommunityError] = useState("");
   const [dailyChallenge, setDailyChallenge] = useState(null);
   const [analytics, setAnalytics] = useState(null);
   const [bookmarks, setBookmarks] = useState([]);
@@ -136,6 +141,7 @@ export default function QuizArena() {
   const [selected, setSelected] = useState(null);
   const [answers, setAnswers] = useState([]);
   const [showExplanation, setShowExplanation] = useState(false);
+  const [answerFeedback, setAnswerFeedback] = useState(null);
   const [timeLeft, setTimeLeft] = useState(30);
   const [startTime, setStartTime] = useState(null);
   const [quizStartTime, setQuizStartTime] = useState(null);
@@ -190,6 +196,23 @@ export default function QuizArena() {
     catch { console.error("Failed to load bookmarks"); }
   };
 
+  // Fetch quizzes created by all users
+const fetchCommunityQuizzes = async () => {
+  setLoadingCommunity(true);
+  setCommunityError("");
+
+  try {
+    const res = await api.get("/quiz/all");
+    setCommunityQuizzes(res.data.quizzes || []);
+  } catch (err) {
+    setCommunityError(
+      err.response?.data?.message || "Unable to load community quizzes."
+    );
+  } finally {
+    setLoadingCommunity(false);
+  }
+};
+
   // Timer Lifecycle
   useEffect(() => {
     if (screen === "playing" && !showExplanation && timerSeconds !== 999) {
@@ -208,6 +231,30 @@ export default function QuizArena() {
   const scrollToSection = (ref) => {
     ref?.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
+const handleOpenCommunity = async () => {
+  setScreen("community");
+  await fetchCommunityQuizzes();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+};
+
+const handleStartCommunityQuiz = (selectedQuiz) => {
+  const effectiveTime = quizMode === "rapid" ? 10 : timerSeconds;
+
+  setQuiz(selectedQuiz);
+  setCurrentQ(0);
+  setAnswers([]);
+  setSelected(null);
+  setShowExplanation(false);
+  setAnswerFeedback(null);
+  setBookmarkedQs(new Set());
+
+  setTimerSeconds(effectiveTime);
+  setQuizStartTime(Date.now());
+  setStartTime(Date.now());
+
+  setScreen("playing");
+  window.scrollTo({ top: 0, behavior: "smooth" });
+};
 
   const handleGenerate = async () => {
     setGenError(""); setGenerating(true);
@@ -216,7 +263,7 @@ export default function QuizArena() {
       const res = await api.post("/quiz/generate", { subject, topic, difficulty, questionCount });
       setQuiz(res.data.quiz);
       setCurrentQ(0); setAnswers([]); setSelected(null);
-      setShowExplanation(false); setBookmarkedQs(new Set());
+      setShowExplanation(false); setAnswerFeedback(null); setBookmarkedQs(new Set());
       setTimerSeconds(effectiveTime);
       setQuizStartTime(Date.now()); setStartTime(Date.now());
       setScreen("playing");
@@ -226,23 +273,56 @@ export default function QuizArena() {
   };
 
   const handleTimeout = () => {
-    clearInterval(timerRef.current);
-    setAnswers(prev => [...prev, { selectedAnswer: "", timeTaken: timerSeconds }]);
-    setSelected("__timeout__"); setShowExplanation(true);
-  };
+  if (selected !== null || showExplanation) return;
 
-  const handleSelect = (option) => {
-    if (selected !== null || showExplanation) return;
-    clearInterval(timerRef.current);
-    const timeTaken = Math.round((Date.now() - startTime) / 1000);
-    setSelected(option);
-    setAnswers(prev => [...prev, { selectedAnswer: option, timeTaken }]);
-    if (quizMode === "exam") {
-      setTimeout(() => { setShowExplanation(false); goNext([...answers, { selectedAnswer: option, timeTaken }]); }, 250);
-    } else {
-      setShowExplanation(true);
+  clearInterval(timerRef.current);
+
+  setAnswers(prev => [
+    ...prev,
+    { selectedAnswer: "", timeTaken: timerSeconds }
+  ]);
+
+  setSelected("__timeout__");
+  setAnswerFeedback(null);
+  setShowExplanation(true);
+};
+
+  const handleSelect = async (option) => {
+  if (selected !== null || showExplanation) return;
+
+  clearInterval(timerRef.current);
+
+  const timeTaken = Math.round((Date.now() - startTime) / 1000);
+  const newAnswer = { selectedAnswer: option, timeTaken };
+
+  setSelected(option);
+  setAnswers(prev => [...prev, newAnswer]);
+  setAnswerFeedback(null);
+
+  if (quizMode === "exam") {
+    setTimeout(() => {
+      setShowExplanation(false);
+      goNext([...answers, newAnswer]);
+    }, 250);
+  } else {
+    try {
+      const res = await api.post("/quiz/check-answer", {
+        quizId: quiz._id,
+        questionIndex: currentQ,
+        selectedAnswer: option
+      });
+
+      setAnswerFeedback(res.data);
+    } catch (err) {
+      setAnswerFeedback({
+        error: err.response?.data?.message ||
+          "Unable to check this answer. Please try again."
+      });
     }
-  };
+
+    setShowExplanation(true);
+  }
+};
 
   const goNext = (currentAnswers = answers) => {
     if (currentQ + 1 < quiz.questions.length) {
@@ -253,59 +333,134 @@ export default function QuizArena() {
 
   const handleNext = () => goNext();
 
-  const handlePrev = () => {
-    if (currentQ > 0) {
-      setCurrentQ(q => q - 1);
-      setSelected(answers[currentQ - 1]?.selectedAnswer || null);
+ const handlePrev = async () => {
+  if (currentQ <= 0) return;
+
+  const previousIndex = currentQ - 1;
+  const previousAnswer = answers[previousIndex]?.selectedAnswer || "";
+
+  setCurrentQ(previousIndex);
+  setSelected(previousAnswer || null);
+  setAnswerFeedback(null);
+  setShowExplanation(false);
+  setStartTime(Date.now());
+
+  if (quizMode === "practice" && previousAnswer) {
+    try {
+      const res = await api.post("/quiz/check-answer", {
+        quizId: quiz._id,
+        questionIndex: previousIndex,
+        selectedAnswer: previousAnswer
+      });
+
+      setAnswerFeedback(res.data);
       setShowExplanation(true);
+    } catch {
+      setAnswerFeedback({
+        error: "Unable to reload answer feedback."
+      });
+      setShowExplanation(true);
+    }
+  } else if (quizMode === "exam" && previousAnswer) {
+    setShowExplanation(true);
+  }
+};
+
+ const toggleBookmark = async () => {
+  try {
+    const payload = {
+      quizId: quiz._id,
+      questionIndex: currentQ
+    };
+
+    const res = await api.post("/quiz/bookmarks", payload);
+
+    setBookmarkedQs(prev => {
+      const n = new Set(prev);
+
+      if (res.data.bookmarked) {
+        n.add(currentQ);
+      } else {
+        n.delete(currentQ);
+      }
+
+      return n;
+    });
+
+    fetchBookmarks();
+
+  } catch (err) {
+    console.error("Bookmark operation failed:", err);
+  }
+};
+  const finishQuiz = async (finalAnswers = answers) => {
+    if (submitting) return;
+
+    clearInterval(timerRef.current);
+    setSubmitting(true);
+
+    try {
+      const totalTime = quizStartTime
+        ? Math.round((Date.now() - quizStartTime) / 1000)
+        : 0;
+
+      const res = await api.post("/quiz/submit", {
+        quizId: quiz._id,
+        answers: finalAnswers,
+        timeTaken: totalTime
+      });
+
+      setResult(res.data);
+      setNewBadges(res.data.newBadges || []);
+
+      fetchStats();
+      fetchAnalytics();
+      fetchBookmarks();
+
+      setScreen("result");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+
+    } catch (err) {
+      console.error("Quiz submission failed:", err);
+      setGenError(
+        err.response?.data?.message ||
+        "Unable to submit quiz. Please try again."
+      );
+    } finally {
+      setSubmitting(false);
     }
   };
 
-  const toggleBookmark = async (q) => {
-    try {
-      const payload = {
-        question: q.question, options: q.options || [], answer: q.answer,
-        explanation: q.explanation || "", subject: quiz.subject, quizId: quiz._id
-      };
-      const res = await api.post("/quiz/bookmarks", payload);
-      setBookmarkedQs(prev => {
-        const n = new Set(prev);
-        if (res.data.bookmarked) n.add(currentQ); else n.delete(currentQ);
-        return n;
-      });
-      fetchBookmarks();
-    } catch (err) { console.error("Bookmark operation failed:", err); }
-  };
-
-  const finishQuiz = async (finalAnswers = answers) => {
-    clearInterval(timerRef.current);
-    const totalTime = Math.round((Date.now() - quizStartTime) / 1000);
-    setSubmitting(true);
-    try {
-      const res = await api.post("/quiz/submit", { quizId: quiz._id, answers: finalAnswers, timeTaken: totalTime });
-      setResult(res.data); setNewBadges(res.data.newBadges || []);
-      setScreen("result"); 
-      fetchStats();
-      fetchAnalytics(); // Refresh analytics after completing a quiz
-    } catch { setScreen("result"); }
-    finally { setSubmitting(false); }
-  };
-
-  const masterMistake = async (id) => {
-    try { await api.patch(`/quiz/mistakes/${id}/master`); fetchMistakes(); }
-    catch { console.error("Failed to mark mistake as mastered"); }
-  };
-
   const resetQuiz = () => {
-    setQuiz(null); setCurrentQ(0); setAnswers([]);
-    setSelected(null); setShowExplanation(false);
-    setResult(null); setNewBadges([]); setGenError("");
+    clearInterval(timerRef.current);
+
+    setQuiz(null);
+    setCurrentQ(0);
+    setSelected(null);
+    setAnswers([]);
+    setShowExplanation(false);
+    setAnswerFeedback(null);
+    setTimeLeft(30);
+    setStartTime(null);
+    setQuizStartTime(null);
+    setResult(null);
+    setNewBadges([]);
+    setBookmarkedQs(new Set());
+    setGenError("");
+    setSubmitting(false);
+
     setScreen("home");
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
+
 
   // Calculations
-  const score = answers.filter((a, i) => a.selectedAnswer === quiz?.questions[i]?.answer).length;
-  const pct = quiz ? Math.round((score / quiz.questions.length) * 100) : 0;
+ const score = result?.attempt?.score ??
+  answers.filter((a, i) => a.selectedAnswer === quiz?.questions[i]?.answer).length;
+
+const pct = quiz?.questions?.length
+  ? Math.round((score / quiz.questions.length) * 100)
+  : 0;
   const timerColor = timerSeconds === 999 ? c.accent : timeLeft <= Math.floor(timerSeconds * 0.33) ? "#EF4444" : timeLeft <= Math.floor(timerSeconds * 0.66) ? "#F59E0B" : "#10B981";
   
   const filteredCategories = SUBJECT_CATEGORIES.map(cat => ({
@@ -629,6 +784,15 @@ export default function QuizArena() {
                   <div style={{ fontSize: "15px", fontWeight: "700", marginBottom: "2px" }}>New Quiz</div>
                   <div className="qa-secondary" style={{ fontSize: "12px" }}>Generate custom AI quiz</div>
                 </div>
+                <div className="qa-card qa-card-interactive" onClick={handleOpenCommunity}>
+  <div style={{ fontSize: "24px", marginBottom: "8px" }}>🌍</div>
+  <div style={{ fontSize: "15px", fontWeight: "700", marginBottom: "2px" }}>
+    Community Quizzes
+  </div>
+  <div className="qa-secondary" style={{ fontSize: "12px" }}>
+    Explore quizzes created by everyone
+  </div>
+</div>
 
                 <div className="qa-card qa-card-interactive" onClick={() => {
                   setShowMistakesSection(prev => !prev);
@@ -909,7 +1073,7 @@ export default function QuizArena() {
             )}
 
             {/* COLLAPSIBLE ANALYTICS */}
-            {showAnalyticsSection && (
+            {showAnalyticsSection &&(
               <div ref={analyticsRef} className="qa-card qa-collapsible-content" style={{ scrollMarginTop: "30px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
                   <div>
@@ -920,27 +1084,68 @@ export default function QuizArena() {
                     Close ✕
                   </button>
                 </div>
+
                 {!analytics ? (
                   <p className="qa-secondary" style={{ textAlign: "center", padding: "20px 0" }}>Loading metrics...</p>
                 ) : (
-                  <div className="qa-grid-stats">
-                    <div className="qa-card-subtle">
-                      <div className="qa-caption">Questions Solved</div>
-                      <div style={{ fontSize: "22px", fontWeight: "800", marginTop: "4px" }}>{analytics.questionsSolved || 0}</div>
-                    </div>
-                    <div className="qa-card-subtle">
-                      <div className="qa-caption">Strong Subjects</div>
-                      <div style={{ fontSize: "13px", fontWeight: "700", marginTop: "6px", color: "#10B981" }}>
-                        {analytics.strongSubjects?.join(", ") || "None recorded"}
+                  <>
+                    <div className="qa-grid-stats">
+                      <div className="qa-card-subtle">
+                        <div className="qa-caption">Questions Solved</div>
+                        <div style={{ fontSize: "22px", fontWeight: "800", marginTop: "4px" }}>{analytics.totalQuestions || 0}</div>
+                      </div>
+
+                      <div className="qa-card-subtle">
+                        <div className="qa-caption">Best Subject</div>
+                        <div style={{ fontSize: "13px", fontWeight: "700", marginTop: "6px", color: "#10B981" }}>
+                          {analytics.bestSubject || "None recorded"}
+                        </div>
+                      </div>
+
+                      <div className="qa-card-subtle">
+                        <div className="qa-caption">Weakest Subject</div>
+                        <div style={{ fontSize: "13px", fontWeight: "700", marginTop: "6px", color: "#EF4444" }}>
+                          {analytics.weakSubject || "None recorded"}
+                        </div>
                       </div>
                     </div>
-                    <div className="qa-card-subtle">
-                      <div className="qa-caption">Weak Subjects</div>
-                      <div style={{ fontSize: "13px", fontWeight: "700", marginTop: "6px", color: "#EF4444" }}>
-                        {analytics.weakSubjects?.join(", ") || "None recorded"}
-                      </div>
+
+                    <div style={{ marginTop: "24px" }}>
+                      <h3 className="qa-card-title">Recent Quiz Attempts</h3>
+
+                      {!analytics.recentAttempts?.length ? (
+                        <p className="qa-secondary">No completed quizzes found yet.</p>
+                      ) : (
+                        <div style={{ display: "grid", gap: "12px" }}>
+                          {analytics.recentAttempts.map((attempt) => (
+                            <div key={attempt._id} className="qa-card-subtle" style={{ padding: "14px" }}>
+                              <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
+                                <div>
+                                  <div style={{ fontWeight: "800" }}>{attempt.quizTitle}</div>
+                                  <div className="qa-secondary" style={{ fontSize: "12px", marginTop: "4px" }}>
+                                    {attempt.subject}
+                                  </div>
+                                </div>
+
+                                <div style={{ textAlign: "right" }}>
+                                  <div style={{ fontWeight: "800" }}>
+                                    {attempt.score}/{attempt.totalQuestions}
+                                  </div>
+                                  <div style={{ color: "#10B981", fontSize: "12px", fontWeight: "700" }}>
+                                    {attempt.accuracy}% accuracy
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="qa-secondary" style={{ fontSize: "12px", marginTop: "10px" }}>
+                                Completed: {attempt.completedAt ? new Date(attempt.completedAt).toLocaleString() : "Date unavailable"}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                  </div>
+                  </>
                 )}
               </div>
             )}
@@ -1093,6 +1298,65 @@ export default function QuizArena() {
 
           </div>
         )}
+                 {/* COMMUNITY QUIZZES SCREEN */}
+        {screen === "community" && (
+          <div style={{ maxWidth: "900px", margin: "0 auto" }}>
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "12px",
+              marginBottom: "20px"
+            }}>
+              <h2 className="qa-card-title">Community Quizzes</h2>
+              <button
+                className="qa-btn-secondary"
+                onClick={() => setScreen("home")}
+              >
+                Back
+              </button>
+            </div>
+
+            {loadingCommunity && (
+              <div className="qa-card">Loading community quizzes...</div>
+            )}
+
+            {communityError && (
+              <div className="qa-card">{communityError}</div>
+            )}
+
+            {!loadingCommunity && !communityError && communityQuizzes.length === 0 && (
+              <div className="qa-card">
+                No community quizzes yet. Be the first to create one!
+              </div>
+            )}
+
+            <div className="qa-grid-actions">
+              {communityQuizzes.map((item) => (
+                <div className="qa-card" key={item._id}>
+                  <h3 className="qa-card-title">
+                    {item.topic || item.subject}
+                  </h3>
+
+                  <p className="qa-secondary">
+                    {item.subject} · {item.difficulty} · {item.questions?.length || 0} questions
+                  </p>
+
+                  <p className="qa-secondary">
+                    Created by {item.createdBy?.name || "STUDORA user"}
+                  </p>
+
+                  <button
+                    className="qa-btn-primary"
+                    onClick={() => handleStartCommunityQuiz(item)}
+                  >
+                    Attempt Quiz
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* ── PLAYING SCREEN ── */}
         {screen === "playing" && quiz && (
@@ -1114,10 +1378,9 @@ export default function QuizArena() {
                 <div key={i} style={{
                   flex: 1, height: "4px", borderRadius: "2px",
                   background: i === currentQ ? c.accent
-                    : answers[i]?.selectedAnswer === quiz.questions[i]?.answer ? "#10B981"
-                    : answers[i] ? "#EF4444"
-                    : bookmarkedQs.has(i) ? "#F59E0B"
-                    : isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.08)",
+  : bookmarkedQs.has(i) ? "#F59E0B"
+  : answers[i] ? "#64748B"
+  : isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.08)",
                   transition: "background 0.2s ease"
                 }} />
               ))}
@@ -1139,14 +1402,16 @@ export default function QuizArena() {
 
               {/* MCQ Options Stack */}
               <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                {quiz.questions[currentQ]?.options.map((option, i) => {
-                  const isCorrect = option === quiz.questions[currentQ].answer;
-                  const isSelected = option === selected;
-                  let cls = "qa-option-btn";
-                  if (showExplanation) {
-                    if (isCorrect) cls += " correct";
-                    else if (isSelected) cls += " wrong";
-                  }
+               {quiz.questions[currentQ]?.options.map((option, i) => {
+  const isCorrect = answerFeedback?.correct &&
+    option === answerFeedback.answer;
+  const isSelected = option === selected;
+  let cls = "qa-option-btn";
+
+  if (showExplanation && answerFeedback && !answerFeedback.error) {
+    if (isCorrect) cls += " correct";
+    else if (isSelected && !answerFeedback.correct) cls += " wrong";
+  }
                   return (
                     <button key={i} className={cls} onClick={() => handleSelect(option)} disabled={showExplanation}>
                       <div style={{
@@ -1160,11 +1425,35 @@ export default function QuizArena() {
               </div>
 
               {/* Explanation Dropdown */}
-              {showExplanation && quiz.questions[currentQ]?.explanation && quizMode !== "exam" && (
-                <div style={{ marginTop: "16px", padding: "14px", background: `${c.accent}10`, border: `1px solid ${c.accent}20`, borderRadius: "14px", fontSize: "13px", lineHeight: "1.5" }}>
-                  <strong style={{ color: c.accent }}>Explanation: </strong>{quiz.questions[currentQ].explanation}
-                </div>
-              )}
+             {showExplanation && quizMode !== "exam" && answerFeedback && (
+  <div style={{
+    marginTop: "16px",
+    padding: "14px",
+    background: `${c.accent}10`,
+    border: `1px solid ${c.accent}20`,
+    borderRadius: "14px",
+    fontSize: "13px",
+    lineHeight: "1.5"
+  }}>
+    {answerFeedback.error ? (
+      <span>{answerFeedback.error}</span>
+    ) : (
+      <>
+        <strong style={{ color: answerFeedback.correct ? "#10B981" : "#EF4444" }}>
+          {answerFeedback.correct ? "Correct! " : "Incorrect. "}
+        </strong>
+        <div>
+          <strong>Correct answer: </strong>{answerFeedback.answer}
+        </div>
+        {answerFeedback.explanation && (
+          <div style={{ marginTop: "6px" }}>
+            <strong>Explanation: </strong>{answerFeedback.explanation}
+          </div>
+        )}
+      </>
+    )}
+  </div>
+)}
             </div>
 
             {/* Footer Question Nav Actions */}
@@ -1195,7 +1484,7 @@ export default function QuizArena() {
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "10px", marginBottom: "24px" }}>
                 <div className="qa-card-subtle">
                   <div className="qa-caption">Score</div>
-                  <div style={{ fontSize: "20px", fontWeight: "800", color: "#10B981", marginTop: "4px" }}>{score}/{quiz?.questions?.length}</div>
+                  <div style={{ fontSize: "20px", fontWeight: "800", color: "#10B981", marginTop: "4px" }}>{score}/{result?.attempt?.totalQuestions ?? quiz?.questions?.length ?? 0}</div>
                 </div>
                 <div className="qa-card-subtle">
                   <div className="qa-caption">Accuracy</div>

@@ -159,8 +159,13 @@ app.get("/api/dashboard/stats", protect, async (req, res) => {
         upcomingTasks,
       },
     });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+ } catch (error) {
+    console.error("Change password error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "An internal server error occurred",
+    });
   }
 });
 
@@ -249,7 +254,12 @@ app.get("/api/analytics", protect, async (req, res) => {
       },
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error("Server error:", error);
+
+res.status(500).json({
+    success: false,
+    message: "An internal server error occurred"
+});
   }
 });
 
@@ -291,11 +301,13 @@ app.put("/api/user/profile", protect, async (req, res) => {
       message: "Profile updated successfully",
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
+    console.error("Dashboard stats error:", error);
+
+    return res.status(500).json({
+        success: false,
+        message: "An internal server error occurred"
     });
-  }
+}
 });
 
 // Change password
@@ -327,18 +339,24 @@ app.put("/api/user/change-password", protect, async (req, res) => {
     }
 
     user.password = await bcrypt.hash(newPassword, 10);
-    await user.save();
+
+// Invalidate all previously issued login tokens
+user.tokenVersion = (user.tokenVersion ?? 0) + 1;
+
+await user.save();
 
     res.json({
       success: true,
       message: "Password changed successfully",
     });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
+ } catch (error) {
+    console.error("Profile update error:", error);
+
+    return res.status(500).json({
+        success: false,
+        message: "An internal server error occurred"
     });
-  }
+}
 });
 
 // Delete account
@@ -359,12 +377,14 @@ app.delete("/api/user/delete-account", protect, async (req, res) => {
       success: true,
       message: "Account deleted successfully",
     });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
+} catch (error) {
+    console.error("Delete account error:", error);
+
+    return res.status(500).json({
+        success: false,
+        message: "An internal server error occurred"
     });
-  }
+}
 });
 
 // ==============================
@@ -527,8 +547,13 @@ app.get("/api/notifications", protect, async (req, res) => {
       unreadCount: notifications.length
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
+    console.error("Analytics error:", error);
+
+    res.status(500).json({
+        success: false,
+        message: "An internal server error occurred"
+    });
+}
 });
 
 // ==============================

@@ -40,11 +40,13 @@ const createTask = async (req, res) => {
 
 
     }
-    catch(error)
+        catch(error)
     {
-        res.status(500).json({
+        console.error("Task operation error:", error);
+
+        return res.status(500).json({
             success: false,
-            message: error.message
+            message: "Unable to complete this task operation. Please try again later."
         });
     }
 
@@ -72,11 +74,13 @@ const getTasks = async (req, res) => {
 
 
     }
-    catch(error)
+        catch(error)
     {
-        res.status(500).json({
+        console.error("Task operation error:", error);
+
+        return res.status(500).json({
             success: false,
-            message: error.message
+            message: "Unable to complete this task operation. Please try again later."
         });
     }
 
@@ -122,13 +126,14 @@ const updateTask = async (req, res) => {
             task
         });
 
-
     }
     catch(error)
     {
-        res.status(500).json({
+        console.error("Task operation error:", error);
+
+        return res.status(500).json({
             success: false,
-            message: error.message
+            message: "Unable to complete this task operation. Please try again later."
         });
     }
 
@@ -167,12 +172,14 @@ const toggleComplete = async (req, res) => {
         });
 
 
-    }
+       }
     catch(error)
     {
-        res.status(500).json({
+        console.error("Task operation error:", error);
+
+        return res.status(500).json({
             success: false,
-            message: error.message
+            message: "Unable to complete this task operation. Please try again later."
         });
     }
 
@@ -209,12 +216,14 @@ const deleteTask = async (req, res) => {
         });
 
 
-    }
+        }
     catch(error)
     {
-        res.status(500).json({
+        console.error("Task operation error:", error);
+
+        return res.status(500).json({
             success: false,
-            message: error.message
+            message: "Unable to complete this task operation. Please try again later."
         });
     }
 

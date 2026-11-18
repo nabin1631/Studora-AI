@@ -22,8 +22,11 @@ Instructions:
 - Quote relevant sections when helpful.`;
 
 
+
 // Upload PDF and extract text
 const uploadPdf = async (req, res) => {
+    let filePath;
+
     try {
         if (!req.file) {
             return res.status(400).json({
@@ -32,21 +35,32 @@ const uploadPdf = async (req, res) => {
             });
         }
 
-        const filePath = req.file.path;
+        filePath = req.file.path;
+
+        // Read uploaded file
+        const dataBuffer = fs.readFileSync(filePath);
+
+        // Validate actual PDF file signature
+        const pdfSignature = dataBuffer.subarray(0, 5).toString("ascii");
+
+        if (pdfSignature !== "%PDF-") {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid PDF file. Please upload a genuine PDF document."
+            });
+        }
 
         // Extract text from PDF
-        const dataBuffer = fs.readFileSync(filePath);
         const pdfData = await pdfParse(dataBuffer);
 
         if (!pdfData.text || pdfData.text.trim().length === 0) {
-            fs.unlinkSync(filePath);
             return res.status(400).json({
                 success: false,
                 message: "Could not extract text from this PDF. It may be image-based."
             });
         }
 
-        // Save to database
+        // Save extracted information to database
         const pdf = await Pdf.create({
             user: req.user._id,
             fileName: req.file.filename,
@@ -56,10 +70,7 @@ const uploadPdf = async (req, res) => {
             messages: []
         });
 
-        // Delete file from server after extracting text
-        fs.unlinkSync(filePath);
-
-        res.status(201).json({
+        return res.status(201).json({
             success: true,
             pdf: {
                 _id: pdf._id,
@@ -72,15 +83,24 @@ const uploadPdf = async (req, res) => {
 
     } catch (error) {
         console.error("PDF upload error:", error);
-        if (req.file?.path && fs.existsSync(req.file.path)) {
-            fs.unlinkSync(req.file.path);
-        }
-        res.status(500).json({
+
+        return res.status(500).json({
             success: false,
-            message: error.message || "Failed to process PDF"
+            message: "Failed to process PDF. Please try again."
         });
+
+    } finally {
+        // Always attempt to delete the temporary uploaded file
+        if (filePath && fs.existsSync(filePath)) {
+            try {
+                fs.unlinkSync(filePath);
+            } catch (cleanupError) {
+                console.error("PDF cleanup error:", cleanupError);
+            }
+        }
     }
 };
+
 
 
 // Get all PDFs for user
@@ -103,12 +123,14 @@ const getPdfs = async (req, res) => {
             }))
         });
 
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: error.message
-        });
-    }
+   } catch (error) {
+    console.error("PDF processing error:", error);
+
+    return res.status(500).json({
+        success: false,
+        message: "An internal server error occurred"
+    });
+}
 };
 
 
@@ -116,14 +138,23 @@ const getPdfs = async (req, res) => {
 const askPdf = async (req, res) => {
     try {
         const { question } = req.body;
-        const { id } = req.params;
+const { id } = req.params;
 
-        if (!question || !question.trim()) {
-            return res.status(400).json({
-                success: false,
-                message: "Question is required"
-            });
-        }
+// Validate question
+if (typeof question !== "string" || !question.trim()) {
+    return res.status(400).json({
+        success: false,
+        message: "A valid question is required"
+    });
+}
+
+// Limit question length
+if (question.trim().length > 2000) {
+    return res.status(400).json({
+        success: false,
+        message: "Question cannot exceed 2000 characters"
+    });
+}
 
         const pdf = await Pdf.findOne({
             _id: id,
@@ -140,7 +171,7 @@ const askPdf = async (req, res) => {
         // Add user question
         pdf.messages.push({
             role: "user",
-            content: question
+            content: question.trim()
         });
 
         // Build message history (last 6 messages)
@@ -180,12 +211,13 @@ const askPdf = async (req, res) => {
         });
 
     } catch (error) {
-        console.error("PDF ask error:", error);
-        res.status(500).json({
-            success: false,
-            message: error.message || "AI service error"
-        });
-    }
+    console.error("PDF ask error:", error);
+
+    return res.status(500).json({
+        success: false,
+        message: "AI service is temporarily unavailable. Please try again later."
+    });
+}
 };
 
 
@@ -210,11 +242,13 @@ const getPdf = async (req, res) => {
         });
 
     } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: error.message
-        });
-    }
+    console.error("PDF operation error:", error);
+
+    return res.status(500).json({
+        success: false,
+        message: "An internal server error occurred"
+    });
+}
 };
 
 
@@ -241,11 +275,13 @@ const deletePdf = async (req, res) => {
         });
 
     } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: error.message
-        });
-    }
+    console.error("PDF history error:", error);
+
+    return res.status(500).json({
+        success: false,
+        message: "An internal server error occurred"
+    });
+}
 };
 
 
@@ -295,11 +331,13 @@ const summarizePdf = async (req, res) => {
         });
 
     } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: error.message
-        });
-    }
+    console.error("PDF operation error:", error);
+
+    return res.status(500).json({
+        success: false,
+        message: "An internal server error occurred"
+    });
+}
 };
 
 

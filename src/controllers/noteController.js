@@ -42,14 +42,14 @@ const createNote = async (req, res) => {
         });
 
 
-    }
-    catch(error)
-    {
-        res.status(500).json({
-            success: false,
-            message: error.message
-        });
-    }
+   } catch (error) {
+    console.error("Create note error:", error);
+
+    return res.status(500).json({
+        success: false,
+        message: "An internal server error occurred"
+    });
+}
 
 };
 
@@ -75,14 +75,14 @@ const getNotes = async (req, res) => {
         });
 
 
-    }
-    catch(error)
-    {
-        res.status(500).json({
-            success: false,
-            message: error.message
-        });
-    }
+   } catch (error) {
+    console.error("Get notes error:", error);
+
+    return res.status(500).json({
+        success: false,
+        message: "An internal server error occurred"
+    });
+}
 
 };
 
@@ -114,14 +114,14 @@ const getNote = async (req, res) => {
         });
 
 
-    }
-    catch(error)
-    {
-        res.status(500).json({
-            success: false,
-            message: error.message
-        });
-    }
+} catch (error) {
+    console.error("Get note error:", error);
+
+    return res.status(500).json({
+        success: false,
+        message: "An internal server error occurred"
+    });
+}
 
 };
 
@@ -166,14 +166,14 @@ const updateNote = async (req, res) => {
         });
 
 
-    }
-    catch(error)
-    {
-        res.status(500).json({
-            success: false,
-            message: error.message
-        });
-    }
+   } catch (error) {
+    console.error("Update note error:", error);
+
+    return res.status(500).json({
+        success: false,
+        message: "An internal server error occurred"
+    });
+}
 
 };
 
@@ -208,14 +208,14 @@ const deleteNote = async (req, res) => {
         });
 
 
-    }
-    catch(error)
-    {
-        res.status(500).json({
-            success: false,
-            message: error.message
-        });
-    }
+    } catch (error) {
+    console.error("Delete note error:", error);
+
+    return res.status(500).json({
+        success: false,
+        message: "An internal server error occurred"
+    });
+}
 
 };
 
@@ -251,15 +251,15 @@ const toggleImportant = async (req, res) => {
             note
         });
 
+}
+   catch (error) {
+    console.error("Toggle important note error:", error);
 
-    }
-    catch(error)
-    {
-        res.status(500).json({
-            success: false,
-            message: error.message
-        });
-    }
+    return res.status(500).json({
+        success: false,
+        message: "An internal server error occurred"
+    });
+}
 
 };
 

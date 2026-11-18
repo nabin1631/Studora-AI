@@ -91,13 +91,13 @@ const sendMessage = async (req, res) => {
         });
 
     } catch (error) {
-        console.error("Groq Error:", error);
+    console.error("Groq Error:", error);
 
-        res.status(500).json({
-            success: false,
-            message: error.message || "AI service error"
-        });
-    }
+    return res.status(500).json({
+        success: false,
+        message: "AI service is temporarily unavailable. Please try again later."
+    });
+}
 };
 
 
@@ -115,11 +115,13 @@ const getChats = async (req, res) => {
             chats
         });
     } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: error.message
-        });
-    }
+    console.error("Chat history error:", error);
+
+    return res.status(500).json({
+        success: false,
+        message: "An internal server error occurred"
+    });
+}
 };
 
 
@@ -142,12 +144,14 @@ const getChat = async (req, res) => {
             success: true,
             chat
         });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: error.message
-        });
-    }
+   } catch (error) {
+    console.error("Get chat error:", error);
+
+    return res.status(500).json({
+        success: false,
+        message: "An internal server error occurred"
+    });
+}
 };
 
 
@@ -173,11 +177,13 @@ const deleteChat = async (req, res) => {
             message: "Chat deleted"
         });
     } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: error.message
-        });
-    }
+    console.error("Delete chat error:", error);
+
+    return res.status(500).json({
+        success: false,
+        message: "An internal server error occurred"
+    });
+}
 };
 
 

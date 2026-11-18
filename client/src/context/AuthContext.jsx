@@ -35,26 +35,26 @@ export const AuthProvider = ({ children }) => {
   };
 
   const signup = async (name, email, password) => {
-    const res = await api.post("/auth/register", { name, email, password });
-    localStorage.setItem("token", res.data.token);
-    localStorage.setItem("user", JSON.stringify(res.data.user));
-    localStorage.setItem("pendingEmail", res.data.user.email);
-    return res.data;
-  };
+  const res = await api.post("/auth/register", { name, email, password });
 
-  const verifyOtp = async (email, otp) => {
-    const res = await api.post("/auth/verify-otp", { email, otp });
-    localStorage.removeItem("pendingEmail");
-    
-    // Process full authentication validation status
-    const savedUser = JSON.parse(localStorage.getItem("user") || "null");
-    if (savedUser) {
-      savedUser.verified = true;
-      localStorage.setItem("user", JSON.stringify(savedUser));
-      setUser(savedUser);
-    }
-    return res.data;
-  };
+  // Store only the email while waiting for OTP verification
+  localStorage.setItem("pendingEmail", res.data.user.email);
+
+  return res.data;
+};
+
+const verifyOtp = async (email, otp) => {
+  const res = await api.post("/auth/verify-otp", { email, otp });
+
+  // Save authentication only after successful OTP verification
+  localStorage.setItem("token", res.data.token);
+  localStorage.setItem("user", JSON.stringify(res.data.user));
+  localStorage.removeItem("pendingEmail");
+
+  setUser(res.data.user);
+
+  return res.data;
+};
 
   const resendOtp = async (email) => {
     const res = await api.post("/auth/resend-otp", { email });

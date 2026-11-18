@@ -6,10 +6,13 @@ const crypto = require("crypto");
 
 
 // Generate JWT Token
-const generateToken = (id) => {
+const generateToken = (user) => {
 
     return jwt.sign(
-        { id },
+        {
+            id: user._id,
+            tokenVersion: user.tokenVersion ?? 0
+        },
         process.env.JWT_SECRET,
         {
             expiresIn: process.env.JWT_EXPIRE
@@ -17,7 +20,6 @@ const generateToken = (id) => {
     );
 
 };
-
 
 // Generate OTP
 const generateOTP = () => {
@@ -123,38 +125,36 @@ const registerUser = async (req,res)=>{
 
 
 
-        const token =
-        generateToken(user._id);
 
 
 
         res.status(201).json({
 
-            success:true,
+    success: true,
 
-            message:"Registration successful",
+    message: "Registration successful. Please verify your email.",
 
-            token,
+    user: {
+        id: user._id,
+        name: user.name,
+        email: user.email
+    }
 
-            user:{
-                id:user._id,
-                name:user.name,
-                email:user.email
-            }
-
-        });
+});
 
 
 
     }
-    catch(error){
+   catch(error){
 
-        res.status(500).json({
-            success:false,
-            message:error.message
-        });
+    console.error("Registration error:", error);
 
-    }
+    res.status(500).json({
+        success:false,
+        message:"An internal server error occurred"
+    });
+
+}
 
 };
 
@@ -163,81 +163,64 @@ const registerUser = async (req,res)=>{
 
 // Login
 
-const loginUser = async(req,res)=>{
 
-    try{
+const loginUser = async (req, res) => {
+    try {
+        const { email, password } = req.body;
 
-        const {
-            email,
-            password
-        } = req.body;
+        const user = await User.findOne({ email });
 
-
-
-        const user =
-        await User.findOne({email});
-
-
-        if(!user)
-        {
+        if (!user) {
             return res.status(401).json({
-                success:false,
-                message:"Invalid email or password"
+                success: false,
+                message: "Invalid email or password"
             });
         }
 
-
-
-        const match =
-        await bcrypt.compare(
+        const match = await bcrypt.compare(
             password,
             user.password
         );
 
-
-        if(!match)
-        {
+        if (!match) {
             return res.status(401).json({
-                success:false,
-                message:"Invalid email or password"
+                success: false,
+                message: "Invalid email or password"
             });
         }
 
+        // Security check: require email verification
+        if (user.verified !== true) {
+            return res.status(403).json({
+                success: false,
+                message: "Please verify your email before logging in."
+            });
+        }
 
+        // Generate JWT only after successful verification
+        const token = generateToken(user);
 
-        const token =
-        generateToken(user._id);
-
-
-
-        res.json({
-
-            success:true,
-
-            message:"Login successful",
-
+        return res.status(200).json({
+            success: true,
+            message: "Login successful",
             token,
-
-            user:{
-                id:user._id,
-                name:user.name,
-                email:user.email
+            user: {
+                id: user._id,
+                name: user.name,
+                email: user.email
             }
-
         });
 
+    } catch (error) {
+        console.error("Login error:", error.message);
 
-    }
-    catch(error){
-
-        res.status(500).json({
-            success:false,
-            message:error.message
+        return res.status(500).json({
+            success: false,
+            message: "An internal server error occurred"
         });
-
     }
-
 };
+
 
 
 
@@ -276,14 +259,17 @@ const verifyOTP = async(req,res)=>{
 
         // OTP Security Check
         // OTP Expired
-if(user.otpExpire < Date.now())
-{
+// OTP Security Check
+if (
+    !otp ||
+    !/^\d{6}$/.test(String(otp)) ||
+    !user.otp ||
+    !user.otpExpire ||
+    user.otpExpire <= Date.now()
+) {
     return res.status(400).json({
-
-        success:false,
-
-        message:"OTP expired"
-
+        success: false,
+        message: "Invalid or expired OTP. Request a new OTP."
     });
 }
 
@@ -331,33 +317,36 @@ user.otpAttempts = 0;
 
 
 
-        await user.save();
+       await user.save();
 
+// Generate token only after successful email verification
+const token = generateToken(user);
 
-
-
-        res.json({
-
-            success:true,
-
-            message:"Email verified"
-
-        });
+res.json({
+    success: true,
+    message: "Email verified",
+    token,
+    user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        verified: user.verified
+    }
+});
 
 
 
     }
-    catch(error){
+   catch(error){
 
-        res.status(500).json({
+    console.error("OTP verification error:", error);
 
-            success:false,
+    return res.status(500).json({
+        success: false,
+        message: "An internal server error occurred"
+    });
 
-            message:error.message
-
-        });
-
-    }
+}
 
 };
 
@@ -387,7 +376,12 @@ const resendOTP = async(req,res)=>{
             });
         }
 
-
+        if (user.verified) {
+    return res.status(400).json({
+        success: false,
+        message: "Email is already verified. Please log in."
+    });
+}
 
         const otp =
         generateOTP();
@@ -432,14 +426,16 @@ Date.now()+10*60*1000;
 
 
     }
-    catch(error){
+   catch(error){
 
-        res.status(500).json({
-            success:false,
-            message:error.message
-        });
+    console.error("Resend OTP error:", error);
 
-    }
+    return res.status(500).json({
+        success: false,
+        message: "An internal server error occurred"
+    });
+
+}
 
 };
 
@@ -468,64 +464,62 @@ const forgotPassword = async(req,res)=>{
     });
 }
 
+const token = crypto.randomBytes(32).toString("hex");
+
+// Store only the SHA-256 hash of the reset token
+    user.resetToken = crypto
+    .createHash("sha256")
+    .update(token)
+    .digest("hex");
 
 
+user.resetTokenExpire = Date.now()+15*60*1000;
+ await user.save();
 
-        const token =
-        crypto.randomBytes(32)
-        .toString("hex");
-
-
-
-        user.resetToken = token;
-
-
-        user.resetTokenExpire =
-        Date.now()+15*60*1000;
-
-
-
-        await user.save();
-
-
-
-
-        await sendEmail({
-
-            email:user.email,
-
-            subject:"STUDORA AI Password Reset",
-
-            message:
-            `
+ try {
+    await sendEmail({
+        email: user.email,
+        subject: "STUDORA AI Password Reset",
+        message: `
             Reset Token:
             ${token}
-            `
+        `
+    });
+} catch (emailError) {
 
-        });
+    // Remove the unused reset token if email delivery fails
+    user.resetToken = null;
+    user.resetTokenExpire = null;
 
+    await user.save();
 
-
-
-        res.json({
-
-            success:true,
-
-            message:"Reset email sent"
-
-        });
+    throw emailError;
+}
 
 
 
-    }
-    catch(error){
 
-        res.status(500).json({
-            success:false,
-            message:error.message
-        });
+      res.status(200).json({
+    success: true,
+    message: "If an account exists for this email, reset instructions will be sent."
+    });
+
+
 
     }
+ catch(error){
+
+    console.error("Forgot password error:", error);
+
+    res.status(500).json({
+
+        success:false,
+
+        message:"An internal server error occurred"
+
+    });
+
+}
 
 };
 
@@ -570,16 +564,19 @@ const resetPassword = async(req,res)=>{
             });
         }
 
-        const user =
-        await User.findOne({
+        // Hash the token received from the reset link
+      const hashedToken = crypto
+    .createHash("sha256")
+    .update(token)
+    .digest("hex");
 
-            resetToken:token,
-
-            resetTokenExpire:{
-                $gt:Date.now()
-            }
-
-        });
+       // Find user using the hashed token
+         const user = await User.findOne({
+    resetToken: hashedToken,
+    resetTokenExpire: {
+        $gt: Date.now()
+    }
+      });
 
 
 
@@ -610,14 +607,14 @@ const resetPassword = async(req,res)=>{
 
 
 
-        user.resetToken = null;
+       user.resetToken = null;
 
-        user.resetTokenExpire = null;
+user.resetTokenExpire = null;
 
+// Invalidate all previously issued login tokens
+user.tokenVersion = (user.tokenVersion ?? 0) + 1;
 
-
-        await user.save();
-
+await user.save();
 
 
 
@@ -634,15 +631,14 @@ const resetPassword = async(req,res)=>{
     }
     catch(error){
 
-        res.status(500).json({
+    console.error("Password reset error:", error);
 
-            success:false,
+    return res.status(500).json({
+        success: false,
+        message: "An internal server error occurred"
+    });
 
-            message:error.message
-
-        });
-
-    }
+}
 
 };
 

@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const Quiz = require("../models/Quiz");
 const QuizAttempt = require("../models/QuizAttempt");
 const User = require("../models/User");
@@ -159,20 +160,37 @@ Requirements:
         });
 
     } catch (error) {
-        console.error("Quiz generation error:", error);
-        res.status(500).json({
-            success: false,
-            message: error.message || "Failed to generate quiz"
-        });
-    }
+    console.error("Quiz generation error:", error);
+
+    return res.status(500).json({
+        success: false,
+        message: "Unable to generate quiz right now. Please try again later."
+    });
+}
 };
 
-// Submit quiz attempt
-const submitAttempt = async (req, res) => {
+// Check one quiz answer (practice mode)
+const checkQuizAnswer = async (req, res) => {
     try {
-        const { quizId, answers, timeTaken } = req.body;
+        const { quizId, questionIndex, selectedAnswer } = req.body;
+
+        if (
+            typeof quizId !== "string" ||
+            !/^[a-fA-F0-9]{24}$/.test(quizId) ||
+            !Number.isInteger(questionIndex) ||
+            typeof selectedAnswer !== "string" ||
+            !selectedAnswer.trim()
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid answer submission"
+            });
+        }
+
 
         const quiz = await Quiz.findById(quizId);
+
+
         if (!quiz) {
             return res.status(404).json({
                 success: false,
@@ -180,91 +198,266 @@ const submitAttempt = async (req, res) => {
             });
         }
 
-        // Calculate score
-        let score = 0;
-        const processedAnswers = answers.map((ans, i) => {
-            const correct = quiz.questions[i]?.answer === ans.selectedAnswer;
-            if (correct) score++;
-            return {
-                questionIndex: i,
-                selectedAnswer: ans.selectedAnswer,
-                correct,
-                timeTaken: ans.timeTaken || 0
-            };
-        });
-
-        // Calculate points
-        let pointsEarned = score * 10;
-        if (timeTaken && timeTaken < 60) pointsEarned += 20; // Speed bonus
-        if (score === quiz.questions.length) pointsEarned += 50; // Perfect score bonus
-
-        // Save attempt
-        const attempt = await QuizAttempt.create({
-            user: req.user._id,
-            quiz: quizId,
-            subject: quiz.subject,
-            answers: processedAnswers,
-            score,
-            totalQuestions: quiz.questions.length,
-            pointsEarned,
-            timeTaken: timeTaken || 0,
-            completed: true
-        });
-
-        // Update user stats
-        const user = await User.findById(req.user._id);
-        user.points += pointsEarned;
-        user.totalQuizzes += 1;
-        user.totalCorrect += score;
-        user.level = Math.floor(user.points / 100) + 1;
-
-        updateStreak(user);
-
-        const newBadges = checkAndAwardBadges(user, { score, totalQuestions: quiz.questions.length });
-
-        await user.save();
-
-        // Auto-save wrong answers to mistake book
-        for (let i = 0; i < processedAnswers.length; i++) {
-            if (!processedAnswers[i].correct) {
-                const q = quiz.questions[i];
-                const existing = await MistakeBook.findOne({ user: req.user._id, question: q.question });
-                if (!existing) {
-                    await MistakeBook.create({
-                        user: req.user._id,
-                        question: q.question,
-                        options: q.options,
-                        answer: q.answer,
-                        explanation: q.explanation || "",
-                        subject: quiz.subject,
-                        userAnswer: processedAnswers[i].selectedAnswer,
-                    });
-                } else {
-                    existing.reviewedCount += 1;
-                    await existing.save();
-                }
-            }
+        if (
+            questionIndex < 0 ||
+            questionIndex >= quiz.questions.length
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid question index"
+            });
         }
 
-        res.json({
+        const question = quiz.questions[questionIndex];
+
+        if (!question.options.includes(selectedAnswer.trim())) {
+            return res.status(400).json({
+                success: false,
+                message: "Selected option is invalid"
+            });
+        }
+
+        return res.json({
             success: true,
-            attempt,
-            pointsEarned,
-            newBadges,
-            userStats: {
-                points: user.points,
-                level: user.level,
-                streak: user.streak,
-                badges: user.badges
-            }
+            correct: question.answer === selectedAnswer.trim(),
+            answer: question.answer,
+            explanation: question.explanation || ""
         });
 
     } catch (error) {
-        res.status(500).json({
+        console.error("Quiz answer check error:", error);
+
+        return res.status(500).json({
             success: false,
-            message: error.message
+            message: "Unable to check this answer. Please try again."
         });
     }
+};
+
+
+// Submit quiz attempt
+const submitAttempt = async (req, res) => {
+    let session;
+
+    try {
+        session = await mongoose.startSession();
+        const { quizId, answers, timeTaken } = req.body;
+
+        if (!mongoose.Types.ObjectId.isValid(quizId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid quiz ID"
+            });
+        }
+
+        if (!Array.isArray(answers)) {
+            return res.status(400).json({
+                success: false,
+                message: "Answers must be an array"
+            });
+        }
+
+        let responseData = null;
+
+        const executeTransaction = async (forceRetake = false) => {
+            await session.withTransaction(async () => {
+
+                const quiz = await Quiz.findById(quizId).session(session);
+
+                if (!quiz) {
+                    const error = new Error("Quiz not found");
+                    error.statusCode = 404;
+                    throw error;
+                }
+
+                if (!quiz.questions.length || answers.length > quiz.questions.length) {
+                    const error = new Error("Invalid number of answers");
+                    error.statusCode = 400;
+                    throw error;
+                }
+
+                // Check whether this user has attempted this quiz before.
+                const previousAttempt = await QuizAttempt.findOne({
+                    user: req.user._id,
+                    quiz: quizId
+                }).session(session);
+
+                const isFirstAttempt = !forceRetake && !previousAttempt;
+
+                // Calculate score using trusted database answers.
+                let score = 0;
+
+                const processedAnswers = quiz.questions.map((question, i) => {
+                    const submittedAnswer = answers[i] || {};
+
+                    const selectedAnswer =
+                        typeof submittedAnswer.selectedAnswer === "string"
+                            ? submittedAnswer.selectedAnswer
+                            : "";
+
+                    const correct = question.answer === selectedAnswer;
+
+                    if (correct) score++;
+
+                    return {
+                        questionIndex: i,
+                        selectedAnswer,
+                        correct,
+                        timeTaken: Math.max(
+                            0,
+                            Number(submittedAnswer.timeTaken) || 0
+                        )
+                    };
+                });
+
+                // First attempt only: 10 points per correct answer.
+                // Perfect score earns an additional 50 points.
+                // No speed bonus.
+                let pointsEarned = 0;
+
+                if (isFirstAttempt) {
+                    pointsEarned = score * 10;
+
+                    if (score === quiz.questions.length) {
+                        pointsEarned += 50;
+                    }
+                }
+
+                // Save every completed attempt.
+                const attempt = new QuizAttempt({
+                    user: req.user._id,
+                    quiz: quizId,
+                    subject: quiz.subject,
+                    answers: processedAnswers,
+                    score,
+                    totalQuestions: quiz.questions.length,
+                    pointsEarned,
+                    timeTaken: Math.max(0, Number(timeTaken) || 0),
+                    completed: true,
+                    isFirstAttempt
+                });
+
+                await attempt.save({ session });
+
+                // Update user statistics on every completed attempt.
+                const user = await User.findById(req.user._id).session(session);
+
+                if (!user) {
+                    const error = new Error("User not found");
+                    error.statusCode = 404;
+                    throw error;
+                }
+
+                // Only first attempts earn points.
+                user.points += pointsEarned;
+
+                user.totalQuizzes += 1;
+                user.totalCorrect += score;
+                user.level = Math.floor(user.points / 100) + 1;
+
+                updateStreak(user);
+
+                const newBadges = checkAndAwardBadges(user, {
+                    score,
+                    totalQuestions: quiz.questions.length
+                });
+
+                await user.save({ session });
+
+                // Update Mistake Book on every attempt.
+                for (let i = 0; i < processedAnswers.length; i++) {
+
+                    if (!processedAnswers[i].correct) {
+                        const question = quiz.questions[i];
+
+                        const existing = await MistakeBook.findOne({
+                            user: req.user._id,
+                            question: question.question
+                        }).session(session);
+
+                        if (!existing) {
+                            const mistake = new MistakeBook({
+                                user: req.user._id,
+                                question: question.question,
+                                options: question.options,
+                                answer: question.answer,
+                                explanation: question.explanation || "",
+                                subject: quiz.subject,
+                                userAnswer: processedAnswers[i].selectedAnswer
+                            });
+
+                            await mistake.save({ session });
+
+                        } else {
+                            existing.reviewedCount += 1;
+                            existing.userAnswer = processedAnswers[i].selectedAnswer;
+                            existing.mastered = false;
+
+                            await existing.save({ session });
+                        }
+                    }
+                }
+
+                responseData = {
+                    success: true,
+                    attempt,
+                    pointsEarned,
+                    newBadges,
+                    userStats: {
+                        points: user.points,
+                        level: user.level,
+                        streak: user.streak,
+                        badges: user.badges
+                    }
+                };
+            });
+        };
+
+        try {
+            // Try to claim the first-attempt reward.
+            await executeTransaction(false);
+
+        } catch (error) {
+
+            // If another simultaneous submission claimed the first attempt,
+            // retry this submission as a retake.
+           const isFirstAttemptDuplicate =
+    error.code === 11000 &&
+    (
+        error.message?.includes("unique_first_attempt_per_user_quiz") ||
+        (
+            error.keyPattern?.user === 1 &&
+            error.keyPattern?.quiz === 1 &&
+            Object.keys(error.keyPattern).length === 2
+        )
+    );
+
+            if (!isFirstAttemptDuplicate) {
+                throw error;
+            }
+
+            responseData = null;
+
+            await executeTransaction(true);
+        }
+
+        return res.json(responseData);
+
+    } catch (error) {
+        console.error("Quiz submission error:", error);
+
+        return res.status(error.statusCode || 500).json({
+            success: false,
+            message: error.statusCode
+                ? error.message
+                : "Unable to complete this quiz. Please try again later."
+        });
+
+    } finally {
+    if (session) {
+        await session.endSession();
+    }
+}
 };
 
 // Get user quiz stats
@@ -277,7 +470,7 @@ const getStats = async (req, res) => {
             .limit(10);
 
         const subjectStats = await QuizAttempt.aggregate([
-            { $match: { user: req.user._id } },
+            { $match: { user: req.user._id, completed: true } },
             { $group: {
                 _id: "$subject",
                 total: { $sum: "$totalQuestions" },
@@ -300,12 +493,14 @@ const getStats = async (req, res) => {
         });
 
     } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: error.message
-        });
+    console.error("Quiz dashboard error:", error);
+
+    return res.status(500).json({
+        success: false,
+        message: "Unable to load quiz dashboard. Please try again later."
+    });
     }
-};
+     };
 
 // Get bookmarks
 const getBookmarks = async (req, res) => {
@@ -319,10 +514,12 @@ const getBookmarks = async (req, res) => {
             bookmarks,
             count: bookmarks.length
         });
-    } catch (error) {
-        res.status(500).json({
+        } catch (error) {
+        console.error("Get bookmarks error:", error);
+
+        return res.status(500).json({
             success: false,
-            message: error.message
+            message: "Unable to load bookmarks. Please try again later."
         });
     }
 };
@@ -330,22 +527,42 @@ const getBookmarks = async (req, res) => {
 // Add / toggle bookmark
 const addBookmark = async (req, res) => {
     try {
-        const { question, options, answer, explanation, subject, quizId } = req.body;
+        const { quizId, questionIndex } = req.body;
 
-        if (!question || !answer) {
+        if (
+            typeof quizId !== "string" ||
+            !/^[a-fA-F0-9]{24}$/.test(quizId) ||
+            !Number.isInteger(questionIndex) ||
+            questionIndex < 0
+        ) {
             return res.status(400).json({
                 success: false,
-                message: "Question and answer are required"
+                message: "Invalid bookmark request"
             });
         }
 
+               // Any logged-in user can bookmark questions from any quiz.
+        const quiz = await Quiz.findById(quizId);
+
+        if (!quiz || questionIndex >= quiz.questions.length) {
+            return res.status(404).json({
+                success: false,
+                message: "Quiz or question not found"
+            });
+        }
+
+        // Get trusted question data from the database
+        const q = quiz.questions[questionIndex];
+
         const existing = await Bookmark.findOne({
             user: req.user._id,
-            question: question.trim()
+            quizId: quiz._id,
+            question: q.question
         });
 
         if (existing) {
             await existing.deleteOne();
+
             return res.json({
                 success: true,
                 bookmarked: false,
@@ -355,15 +572,15 @@ const addBookmark = async (req, res) => {
 
         const bookmark = await Bookmark.create({
             user: req.user._id,
-            question: question.trim(),
-            options: options || [],
-            answer: answer.trim(),
-            explanation: explanation || "",
-            subject: subject || "General",
-            quizId: quizId || null
+            question: q.question,
+            options: q.options,
+            answer: q.answer,
+            explanation: q.explanation || "",
+            subject: quiz.subject,
+            quizId: quiz._id
         });
 
-        res.status(201).json({
+        return res.status(201).json({
             success: true,
             bookmarked: true,
             bookmark
@@ -371,20 +588,25 @@ const addBookmark = async (req, res) => {
 
     } catch (error) {
         console.error("Bookmark error:", error);
-        res.status(500).json({
+
+        return res.status(500).json({
             success: false,
-            message: error.message
+            message: "Unable to save bookmark. Please try again later."
         });
     }
 };
-
 // Get mistake book
 const getMistakes = async (req, res) => {
     try {
         const mistakes = await MistakeBook.find({ user: req.user._id, mastered: false }).sort({ createdAt: -1 });
         res.json({ success: true, mistakes });
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+            } catch (error) {
+        console.error("Get mistakes error:", error);
+
+        return res.status(500).json({
+            success: false,
+            message: "Unable to load mistakes. Please try again later."
+        });
     }
 };
 
@@ -397,8 +619,13 @@ const masterMistake = async (req, res) => {
             { new: true }
         );
         res.json({ success: true, mistake });
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        } catch (error) {
+        console.error("Master mistake error:", error);
+
+        return res.status(500).json({
+            success: false,
+            message: "Unable to update mistake status. Please try again later."
+        });
     }
 };
 
@@ -419,20 +646,34 @@ const getDailyChallenge = async (req, res) => {
                 date: today,
             }
         });
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        } catch (error) {
+        console.error("Get daily challenge error:", error);
+
+        return res.status(500).json({
+            success: false,
+            message: "Unable to load the daily challenge. Please try again later."
+        });
     }
 };
 
 // Get performance analytics
 const getPerformanceAnalytics = async (req, res) => {
     try {
-        const attempts = await QuizAttempt.find({ user: req.user._id })
-            .sort({ createdAt: -1 })
-            .limit(20);
+       const attempts = await QuizAttempt.find({
+    user: req.user._id,
+    completed: true
+})
+    .populate("quiz", "topic subject difficulty")
+    .sort({ createdAt: -1 })
+    .limit(20);
+
+            const allAttempts = await QuizAttempt.find({
+            user: req.user._id,
+            completed: true
+        }).select("score totalQuestions timeTaken");
 
         const subjectPerformance = await QuizAttempt.aggregate([
-            { $match: { user: req.user._id } },
+              { $match: { user: req.user._id, completed: true } },
             { $group: {
                 _id: "$subject",
                 totalQuestions: { $sum: "$totalQuestions" },
@@ -452,31 +693,83 @@ const getPerformanceAnalytics = async (req, res) => {
 
         const bestSubject = subjectPerformance[0]?._id || "N/A";
         const weakSubject = subjectPerformance[subjectPerformance.length - 1]?._id || "N/A";
-        const totalCorrect = attempts.reduce((s, a) => s + a.score, 0);
-        const totalQuestions = attempts.reduce((s, a) => s + a.totalQuestions, 0);
+        const totalCorrect = allAttempts.reduce((s, a) => s + a.score, 0);
+         const totalQuestions = allAttempts.reduce((s, a) => s + a.totalQuestions, 0);
         const avgTime = attempts.length ? Math.round(attempts.reduce((s, a) => s + (a.timeTaken || 0), 0) / attempts.length) : 0;
 
         res.json({
             success: true,
             analytics: {
-                chartData,
-                subjectPerformance,
-                bestSubject,
-                weakSubject,
-                totalCorrect,
-                totalQuestions,
-                overallAccuracy: totalQuestions ? Math.round((totalCorrect / totalQuestions) * 100) : 0,
-                avgTime,
-                totalAttempts: attempts.length,
-            }
+    chartData,
+    subjectPerformance,
+    bestSubject,
+    weakSubject,
+    totalCorrect,
+    totalQuestions,
+    overallAccuracy: totalQuestions ? Math.round((totalCorrect / totalQuestions) * 100) : 0,
+    avgTime,
+   totalAttempts: allAttempts.length,
+
+    recentAttempts: attempts.map((attempt) => ({
+        _id: attempt._id,
+        quizTitle: attempt.quiz?.topic || attempt.subject,
+        subject: attempt.subject,
+        score: attempt.score,
+        totalQuestions: attempt.totalQuestions,
+        accuracy: attempt.totalQuestions
+            ? Math.round((attempt.score / attempt.totalQuestions) * 100)
+            : 0,
+        timeTaken: attempt.timeTaken,
+        completedAt: attempt.createdAt
+    }))
+}
         });
+        } catch (error) {
+        console.error("Quiz analytics error:", error);
+
+        return res.status(500).json({
+            success: false,
+            message: "Unable to load quiz analytics. Please try again later."
+        });
+    }
+};
+
+// Get quizzes created by all users.
+const getAllQuizzes = async (req, res) => {
+    try {
+        const quizzes = await Quiz.find()
+    .select("subject topic difficulty type questions createdBy createdAt")
+    .populate("createdBy", "name")
+    .sort({ createdAt: -1 })
+    .limit(50)
+    .lean();
+
+quizzes.forEach((quiz) => {
+    quiz.questions = quiz.questions.map((question) => ({
+        _id: question._id,
+        question: question.question,
+        options: question.options
+    }));
+});
+
+        res.json({
+            success: true,
+            quizzes
+        });
+
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        console.error("Get all quizzes error:", error);
+
+        return res.status(500).json({
+            success: false,
+            message: "Unable to load quizzes."
+        });
     }
 };
 
 module.exports = {
     generateQuiz,
+    checkQuizAnswer,
     submitAttempt,
     getStats,
     getBookmarks,
@@ -484,5 +777,6 @@ module.exports = {
     getMistakes,
     masterMistake,
     getDailyChallenge,
+      getAllQuizzes,
     getPerformanceAnalytics,
 };

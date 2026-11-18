@@ -11,3 +11,9 @@ coverage/
 dist/
 
 build/
+quiz-part1.txt
+src/controllers/authController.backup.js
+src/controllers/quizController.backup.js
+STUDORA-security-backup-20261108-233003/
+review-stat.txt
+quiz-diff.txt

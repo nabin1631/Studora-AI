@@ -57,20 +57,33 @@ const protect = async (req,res,next)=>{
 
 
 
-        if(!req.user)
-        {
-            return res.status(401).json({
+if (!req.user) {
+    return res.status(401).json({
+        success: false,
+        message: "User not found"
+    });
+}
+// Check token version to invalidate old sessions
+const currentTokenVersion = req.user.tokenVersion ?? 0;
+const tokenVersionFromJwt = decoded.tokenVersion ?? 0;
 
-                success:false,
+if (tokenVersionFromJwt !== currentTokenVersion) {
+    return res.status(401).json({
+        success: false,
+        message: "Session expired. Please log in again."
+    });
+}
 
-                message:"User not found"
+// Block users whose email is not verified
+if (req.user.verified !== true) {
+    return res.status(403).json({
+        success: false,
+        message: "Please verify your email to access this resource."
+    });
+}
 
-            });
-        }
+next();
 
-
-
-        next();
 
 
 

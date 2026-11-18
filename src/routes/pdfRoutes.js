@@ -13,6 +13,20 @@ const {
 } = require("../controllers/pdfController");
 
 const { protect } = require("../middleware/authMiddleware");
+const rateLimit = require("express-rate-limit");
+
+// Temporary test: Limit AI requests to 2 per user every 15 minutes
+const pdfAiLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => req.user._id.toString(),
+    message: {
+        success: false,
+        message: "Too many AI requests. Please try again after 15 minutes."
+    }
+});
 
 // Multer config
 const storage = multer.diskStorage({
@@ -43,8 +57,8 @@ const upload = multer({
 router.post("/upload", protect, upload.single("pdf"), uploadPdf);
 router.get("/", protect, getPdfs);
 router.get("/:id", protect, getPdf);
-router.post("/:id/ask", protect, askPdf);
-router.post("/:id/summarize", protect, summarizePdf);
+router.post("/:id/ask", protect, pdfAiLimiter, askPdf);
+router.post("/:id/summarize", protect, pdfAiLimiter, summarizePdf);
 router.delete("/:id", protect, deletePdf);
 
 module.exports = router;
