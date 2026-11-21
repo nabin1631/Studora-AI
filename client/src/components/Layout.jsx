@@ -70,12 +70,6 @@ const Icons = {
       <polyline points="9 18 15 12 9 6" />
     </svg>
   ),
-  Search: (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="11" cy="11" r="8" />
-      <line x1="21" y1="21" x2="16.65" y2="16.65" />
-    </svg>
-  ),
   Menu: (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
       <line x1="3" y1="12" x2="21" y2="12" />
@@ -90,26 +84,46 @@ const Icons = {
       <line x1="21" y1="12" x2="9" y2="12" />
     </svg>
   ),
+  Sun: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+    </svg>
+  ),
+  Moon: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+    </svg>
+  ),
 };
 
+// `color` is only used for each item's hover/active tint (sidebar design only).
 const NAV_ITEMS = [
-  { to: "/dashboard", icon: Icons.Dashboard, label: "Dashboard", sub: "Your learning hub", category: "WORKSPACE" },
-  { to: "/ai-tutor", icon: Icons.AITutor, label: "AI Tutor", sub: "Ask anything", category: "WORKSPACE" },
-  { to: "/pdf-ai", icon: Icons.PDFAI, label: "PDF AI", sub: "Chat with PDFs", category: "WORKSPACE" },
-  { to: "/notes", icon: Icons.Notes, label: "Notes", sub: "Take smart notes", category: "PRODUCTIVITY" },
-  { to: "/planner", icon: Icons.Planner, label: "Planner", sub: "Plan your schedule", category: "PRODUCTIVITY" },
-  { to: "/quiz-arena", icon: Icons.QuizArena, label: "Quiz Arena", sub: "Practice & compete", category: "PRODUCTIVITY" },
-  { to: "/analytics", icon: Icons.Analytics, label: "Analytics", sub: "Track your progress", category: "PRODUCTIVITY" },
-  { to: "/settings", icon: Icons.Settings, label: "Settings", sub: "Preferences & more", category: "ACCOUNT" },
+  { to: "/dashboard", icon: Icons.Dashboard, label: "Dashboard", sub: "Your learning hub", category: "WORKSPACE", color: "#6366F1" },
+  { to: "/ai-tutor", icon: Icons.AITutor, label: "AI Tutor", sub: "Ask anything", category: "WORKSPACE", color: "#10B981" },
+  { to: "/pdf-ai", icon: Icons.PDFAI, label: "PDF AI", sub: "Chat with PDFs", category: "WORKSPACE", color: "#F59E0B" },
+  { to: "/notes", icon: Icons.Notes, label: "Notes", sub: "Take smart notes", category: "PRODUCTIVITY", color: "#2563EB" },
+  { to: "/planner", icon: Icons.Planner, label: "Planner", sub: "Plan your schedule", category: "PRODUCTIVITY", color: "#EC4899" },
+  { to: "/quiz-arena", icon: Icons.QuizArena, label: "Quiz Arena", sub: "Practice & compete", category: "PRODUCTIVITY", color: "#EF4444" },
+  { to: "/analytics", icon: Icons.Analytics, label: "Analytics", sub: "Track your progress", category: "PRODUCTIVITY", color: "#8B5CF6" },
+  { to: "/settings", icon: Icons.Settings, label: "Settings", sub: "Preferences & more", category: "ACCOUNT", color: "#38BDF8" },
 ];
 
 function Layout({ children, isGuest = false }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const { logout, user } = useAuth();
-  const { colors: c } = useTheme();
+  const themeCtx = useTheme();
+  const { colors: c } = themeCtx;
   const navigate = useNavigate();
   const { promptAuth } = useGuest();
+
+  // Works with the common ThemeContext shapes (toggleTheme / isDark, etc.)
+  const toggleTheme =
+    themeCtx.toggleTheme || themeCtx.toggle || themeCtx.toggleMode || themeCtx.switchTheme || (() => {});
+  const isDark =
+    typeof themeCtx.isDark === "boolean"
+      ? themeCtx.isDark
+      : themeCtx.darkMode === true || themeCtx.theme === "dark" || themeCtx.mode === "dark";
 
   const handleLogout = () => {
     logout();
@@ -140,6 +154,8 @@ function Layout({ children, isGuest = false }) {
       <div className="nav-category-header">{category}</div>
       <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
         {getNavItemsByCategory(category).map((item) => {
+          const itemStyle = { "--nc": item.color, "--ni": NAV_ITEMS.indexOf(item) };
+
           if (isGuest) {
             return (
               <div
@@ -149,6 +165,7 @@ function Layout({ children, isGuest = false }) {
                   if (isMobileView) setSidebarOpen(false);
                 }}
                 className="nav-card-item"
+                style={itemStyle}
                 role="button"
                 tabIndex={0}
               >
@@ -166,6 +183,7 @@ function Layout({ children, isGuest = false }) {
             <NavLink
               key={item.to}
               to={item.to}
+              style={itemStyle}
               onClick={() => isMobileView && setSidebarOpen(false)}
               className={({ isActive }) => `nav-card-item ${isActive ? "active" : ""}`}
             >
@@ -235,49 +253,6 @@ function Layout({ children, isGuest = false }) {
           transition: all 200ms ease;
         }
 
-        /* SEARCH BAR (42px HEIGHT) */
-        .top-search-wrapper {
-          position: relative;
-          flex: 1;
-          max-width: 360px;
-          display: flex;
-          align-items: center;
-        }
-
-        .top-search-icon {
-          position: absolute;
-          left: 14px;
-          color: var(--theme-text-secondary);
-          pointer-events: none;
-          display: flex;
-          align-items: center;
-        }
-
-        .top-search {
-          background: var(--theme-bg);
-          border: 1px solid var(--theme-border);
-          border-radius: 10px;
-          height: 42px;
-          padding: 0 14px 0 38px;
-          color: var(--theme-text-primary);
-          font-size: 13.5px;
-          font-weight: 500;
-          outline: none;
-          width: 100%;
-          transition: all 200ms ease-out;
-        }
-
-        .top-search::placeholder {
-          color: var(--theme-text-faint);
-          font-weight: 400;
-        }
-
-        .top-search:focus {
-          background: var(--theme-card-bg);
-          border-color: var(--theme-accent);
-          box-shadow: 0 0 0 3px rgba(110, 58, 255, 0.12);
-        }
-
         .icon-btn {
           background: var(--theme-card-bg);
           border: 1px solid var(--theme-border);
@@ -297,6 +272,39 @@ function Layout({ children, isGuest = false }) {
           background: var(--theme-bg);
           border-color: var(--theme-accent);
           color: var(--theme-accent);
+        }
+
+        /* ----- Dark / Light mode toggle ----- */
+        .theme-toggle-btn {
+          overflow: hidden;
+          position: relative;
+        }
+        .theme-toggle-icon {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          animation: lxThemeSpin 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+          transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+        .theme-toggle-btn:hover .theme-toggle-icon {
+          transform: rotate(18deg) scale(1.12);
+        }
+        .theme-toggle-btn:active .theme-toggle-icon {
+          transform: scale(0.9);
+        }
+        .theme-toggle-btn.is-dark {
+          color: #F59E0B;
+        }
+        .theme-toggle-btn.is-dark:hover {
+          border-color: #F59E0B;
+          color: #F59E0B;
+          box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.14);
+        }
+        .theme-toggle-btn:not(.is-dark):hover {
+          box-shadow: 0 0 0 3px rgba(110, 58, 255, 0.12);
+        }
+        @keyframes lxThemeSpin {
+          from { opacity: 0; transform: rotate(-90deg) scale(0.5); }
         }
 
         .btn-primary {
@@ -346,8 +354,21 @@ function Layout({ children, isGuest = false }) {
           display: block;
         }
 
-        /* SIDEBAR DESKTOP */
+        /* =====================================================
+           SIDEBAR (restyled: only design + hover animation)
+        ===================================================== */
+
+        @keyframes lxSlideIn { from { opacity: 0; transform: translateX(-14px); } }
+        @keyframes lxFade { from { opacity: 0; } }
+        @keyframes lxAurora {
+          0%, 100% { transform: translate(0, 0) scale(1); }
+          50% { transform: translate(-16px, 12px) scale(1.15); }
+        }
+        @keyframes lxShine { 50%, 100% { transform: translateX(120%); } }
+
         .sidebar-fixed {
+          --ease: cubic-bezier(0.22, 1, 0.36, 1);
+          position: relative;
           width: var(--sidebar-w);
           flex-shrink: 0;
           background: var(--theme-card-bg);
@@ -357,6 +378,17 @@ function Layout({ children, isGuest = false }) {
           z-index: 30;
           transition: background 200ms ease, border-color 200ms ease;
         }
+
+        /* soft accent glow at the top of the sidebar */
+        .sidebar-fixed::before, .sidebar-mobile::before {
+          content: "";
+          position: absolute;
+          top: 0; left: 0; right: 0;
+          height: 170px;
+          background: radial-gradient(120% 100% at 0% 0%, color-mix(in srgb, var(--theme-accent) 12%, transparent), transparent 70%);
+          pointer-events: none;
+        }
+        .sidebar-fixed > *, .sidebar-mobile > * { position: relative; }
 
         .sidebar-header-area {
           padding: 18px 24px 14px 24px;
@@ -371,6 +403,9 @@ function Layout({ children, isGuest = false }) {
         }
 
         .nav-category-header {
+          display: flex;
+          align-items: center;
+          gap: 10px;
           text-transform: uppercase;
           font-size: 11px;
           color: var(--theme-text-faint);
@@ -378,36 +413,88 @@ function Layout({ children, isGuest = false }) {
           font-weight: 700;
           padding: 12px 12px 8px 12px;
         }
+        .nav-category-header::after {
+          content: "";
+          flex: 1;
+          height: 1px;
+          background: linear-gradient(90deg, var(--theme-border), transparent);
+        }
 
+        /* ----- Menu item ----- */
         .nav-card-item {
+          --ease: cubic-bezier(0.22, 1, 0.36, 1);
+          --nc: var(--theme-accent);
+          position: relative;
+          overflow: hidden;
           display: flex;
           align-items: center;
           gap: 12px;
           padding: 8px 12px;
           border-radius: 12px;
+          border: 1px solid transparent;
           text-decoration: none;
-          position: relative;
-          transition: all 200ms cubic-bezier(0.16, 1, 0.3, 1);
           cursor: pointer;
           background: transparent;
+          animation: lxSlideIn 0.5s var(--ease) backwards;
+          animation-delay: calc(var(--ni, 0) * 45ms + 120ms);
+          transition: transform 0.35s var(--ease), border-color 0.3s ease, box-shadow 0.35s ease;
+        }
+        .nav-card-item > * { position: relative; z-index: 1; }
+
+        /* colour wash that sweeps in from the left on hover */
+        .nav-card-item::after {
+          content: "";
+          position: absolute;
+          inset: 0;
+          z-index: 0;
+          background: linear-gradient(90deg, color-mix(in srgb, var(--nc) 16%, transparent), color-mix(in srgb, var(--nc) 3%, transparent));
+          transform: scaleX(0);
+          transform-origin: left;
+          transition: transform 0.45s var(--ease);
+        }
+
+        /* accent bar on the left edge, grows from the centre */
+        .nav-card-item::before {
+          content: "";
+          position: absolute;
+          left: 0;
+          top: 50%;
+          z-index: 2;
+          width: 3px;
+          height: 0;
+          border-radius: 0 4px 4px 0;
+          background: var(--nc);
+          transform: translateY(-50%);
+          transition: height 0.4s var(--ease);
         }
 
         .nav-card-item:hover {
-          background: var(--theme-bg);
-          transform: translateX(2px);
+          transform: translateX(5px);
+          border-color: color-mix(in srgb, var(--nc) 25%, transparent);
+          box-shadow: 0 6px 16px color-mix(in srgb, var(--nc) 12%, transparent);
         }
+        .nav-card-item:hover::after { transform: scaleX(1); }
+        .nav-card-item:hover::before { height: 22px; }
+        .nav-card-item:active { transform: translateX(5px) scale(0.98); }
+        .nav-card-item:focus-visible { outline: 2px solid var(--nc); outline-offset: 2px; }
 
         .nav-icon-badge {
           width: 38px;
           height: 38px;
           border-radius: 10px;
-          background: rgba(110, 58, 255, 0.12);
-          color: var(--theme-accent);
+          background: color-mix(in srgb, var(--nc) 14%, transparent);
+          color: var(--nc);
           display: flex;
           align-items: center;
           justify-content: center;
           flex-shrink: 0;
-          transition: all 200ms ease;
+          transition: transform 0.45s var(--ease), background 0.3s ease, color 0.3s ease, box-shadow 0.35s ease;
+        }
+        .nav-card-item:hover .nav-icon-badge {
+          transform: scale(1.1) rotate(-8deg);
+          background: var(--nc);
+          color: #FFFFFF;
+          box-shadow: 0 6px 14px color-mix(in srgb, var(--nc) 40%, transparent);
         }
 
         .nav-text-container {
@@ -422,39 +509,51 @@ function Layout({ children, isGuest = false }) {
           font-size: 13.5px;
           font-weight: 600;
           line-height: 1.25;
+          transition: color 0.25s ease, transform 0.35s var(--ease);
         }
+        .nav-card-item:hover .nav-title-text { color: var(--nc); transform: translateX(2px); }
 
         .nav-sub-text {
           color: var(--theme-text-secondary);
           font-size: 11.5px;
           font-weight: 500;
           margin-top: 1px;
+          transition: transform 0.35s var(--ease) 0.03s;
         }
+        .nav-card-item:hover .nav-sub-text { transform: translateX(2px); }
 
         .active-chevron {
-          color: var(--theme-accent);
+          display: flex;
+          color: var(--nc);
           opacity: 0;
-          transform: translateX(-4px);
-          transition: all 200ms ease;
+          transform: translateX(-8px);
+          transition: opacity 0.25s ease, transform 0.4s var(--ease);
         }
+        .nav-card-item:hover .active-chevron { opacity: 0.75; transform: translateX(0); }
 
         .guest-lock-icon {
           font-size: 12px;
           color: var(--theme-text-faint);
+          transition: transform 0.35s var(--ease);
         }
+        .nav-card-item:hover .guest-lock-icon { transform: scale(1.25) rotate(-10deg); }
 
+        /* ----- Active route ----- */
         .nav-card-item.active {
-          background: rgba(110, 58, 255, 0.1);
+          background: linear-gradient(90deg, color-mix(in srgb, var(--nc) 16%, transparent), color-mix(in srgb, var(--nc) 4%, transparent));
+          border-color: color-mix(in srgb, var(--nc) 30%, transparent);
         }
+        .nav-card-item.active::after { display: none; }
+        .nav-card-item.active::before { height: 26px; }
 
         .nav-card-item.active .nav-icon-badge {
-          background: var(--theme-accent);
+          background: var(--nc);
           color: #FFFFFF;
-          box-shadow: 0 4px 12px rgba(110, 58, 255, 0.3);
+          box-shadow: 0 6px 16px color-mix(in srgb, var(--nc) 45%, transparent);
         }
 
         .nav-card-item.active .nav-title-text {
-          color: var(--theme-accent);
+          color: var(--nc);
           font-weight: 700;
         }
 
@@ -463,20 +562,50 @@ function Layout({ children, isGuest = false }) {
           transform: translateX(0);
         }
 
+        /* ----- Upgrade card ----- */
         .upgrade-card-box {
-          background: linear-gradient(135deg, #181822 0%, #11111A 100%);
+          background: linear-gradient(135deg, #1b1b2e 0%, #11111A 100%);
           border-radius: 16px;
           padding: 18px;
           margin-top: 16px;
           position: relative;
           overflow: hidden;
           border: 1px solid rgba(255, 255, 255, 0.1);
+          transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.35s ease, border-color 0.3s ease;
+        }
+        .upgrade-card-box::before {
+          content: "";
+          position: absolute;
+          width: 180px; height: 180px;
+          right: -60px; top: -70px;
+          border-radius: 50%;
+          background: radial-gradient(circle, rgba(139, 92, 246, 0.5), transparent 70%);
+          animation: lxAurora 7s ease-in-out infinite;
+          pointer-events: none;
+        }
+        .upgrade-card-box::after {
+          content: "";
+          position: absolute;
+          width: 140px; height: 140px;
+          left: -50px; bottom: -70px;
+          border-radius: 50%;
+          background: radial-gradient(circle, rgba(56, 189, 248, 0.3), transparent 70%);
+          animation: lxAurora 9s ease-in-out infinite reverse;
+          pointer-events: none;
+        }
+        .upgrade-card-box > * { position: relative; z-index: 1; }
+        .upgrade-card-box:hover {
+          transform: translateY(-3px);
+          border-color: rgba(167, 139, 250, 0.5);
+          box-shadow: 0 16px 34px rgba(99, 102, 241, 0.26);
         }
 
         .coming-soon-pill {
           position: absolute;
           top: 0;
           right: 0;
+          z-index: 2;
+          overflow: hidden;
           background: linear-gradient(90deg, #FF6B6B, #FF8E53);
           color: #FFFFFF;
           font-size: 9px;
@@ -486,7 +615,16 @@ function Layout({ children, isGuest = false }) {
           border-bottom-left-radius: 12px;
           letter-spacing: 0.5px;
         }
+        .coming-soon-pill::after {
+          content: "";
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(110deg, transparent 30%, rgba(255,255,255,0.55) 50%, transparent 70%);
+          transform: translateX(-120%);
+          animation: lxShine 3.4s ease-in-out infinite;
+        }
 
+        /* ----- Profile card ----- */
         .profile-card-box {
           display: flex;
           align-items: center;
@@ -496,12 +634,14 @@ function Layout({ children, isGuest = false }) {
           margin-top: 16px;
           background: var(--theme-bg);
           border: 1px solid var(--theme-border);
-          transition: all 200ms ease;
+          transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.25s ease, box-shadow 0.35s ease;
           cursor: pointer;
         }
 
         .profile-card-box:hover {
+          transform: translateY(-2px);
           border-color: var(--theme-accent);
+          box-shadow: 0 10px 22px color-mix(in srgb, var(--theme-accent) 16%, transparent);
         }
 
         .profile-avatar-circle {
@@ -516,8 +656,11 @@ function Layout({ children, isGuest = false }) {
           font-weight: 700;
           font-size: 15px;
           flex-shrink: 0;
+          transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
         }
+        .profile-card-box:hover .profile-avatar-circle { transform: scale(1.08) rotate(-6deg); }
 
+        /* ----- Mobile drawer ----- */
         .sidebar-mobile {
           position: fixed;
           top: 0;
@@ -530,7 +673,14 @@ function Layout({ children, isGuest = false }) {
           z-index: 60;
           display: flex;
           flex-direction: column;
-          transition: transform 300ms cubic-bezier(0.16, 1, 0.3, 1);
+          overflow: hidden;
+          transition: transform 350ms cubic-bezier(0.22, 1, 0.36, 1);
+        }
+        /* menu items only animate when the drawer opens */
+        .sidebar-mobile .nav-card-item { animation: none; }
+        .sidebar-mobile.open .nav-card-item {
+          animation: lxSlideIn 0.45s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+          animation-delay: calc(var(--ni, 0) * 40ms + 150ms);
         }
 
         .drawer-overlay {
@@ -539,6 +689,7 @@ function Layout({ children, isGuest = false }) {
           background: rgba(0, 0, 0, 0.5);
           backdrop-filter: blur(4px);
           z-index: 50;
+          animation: lxFade 0.3s ease;
         }
 
         @media (min-width: 992px) {
@@ -550,6 +701,18 @@ function Layout({ children, isGuest = false }) {
           .desktop-only { display: none !important; }
           .sidebar-fixed { display: none !important; }
           .brand-logo-img { height: 32px; }
+          .navbar-header { padding: 0 16px; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .sidebar-fixed *, .sidebar-fixed *::before, .sidebar-fixed *::after,
+          .sidebar-mobile *, .sidebar-mobile *::before, .sidebar-mobile *::after,
+          .theme-toggle-icon {
+            animation-duration: 0.01ms !important;
+            animation-delay: 0ms !important;
+            animation-iteration-count: 1 !important;
+            transition-duration: 0.01ms !important;
+          }
         }
       `}</style>
 
@@ -597,7 +760,10 @@ function Layout({ children, isGuest = false }) {
       {/* MOBILE DRAWER SIDEBAR */}
       <div className="mobile-only">
         {sidebarOpen && <div className="drawer-overlay" onClick={() => setSidebarOpen(false)} />}
-        <aside className="sidebar-mobile" style={{ transform: sidebarOpen ? "translateX(0)" : "translateX(-100%)" }}>
+        <aside
+          className={`sidebar-mobile ${sidebarOpen ? "open" : ""}`}
+          style={{ transform: sidebarOpen ? "translateX(0)" : "translateX(-100%)" }}
+        >
           <div className="sidebar-header-area" style={{ padding: "16px 20px" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
@@ -652,48 +818,38 @@ function Layout({ children, isGuest = false }) {
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, overflow: "hidden" }}>
         {/* PREMIUM STICKY HEADER NAV (60px) */}
         <header className="navbar-header">
-          {!mobileSearchOpen ? (
-            <>
-              <div style={{ display: "flex", alignItems: "center", gap: "12px", flex: 1, minWidth: 0 }}>
-                <button className="icon-btn mobile-only" onClick={() => setSidebarOpen(!sidebarOpen)} title="Menu">
-                  {Icons.Menu}
-                </button>
-                <img src="/logo.png" alt="Studora AI" className="brand-logo-img mobile-only" />
+          <div style={{ display: "flex", alignItems: "center", gap: "12px", flex: 1, minWidth: 0 }}>
+            <button className="icon-btn mobile-only" onClick={() => setSidebarOpen(!sidebarOpen)} title="Menu">
+              {Icons.Menu}
+            </button>
+            <img src="/logo.png" alt="Studora AI" className="brand-logo-img mobile-only" />
+          </div>
 
-                <div className="top-search-wrapper desktop-only">
-                  <span className="top-search-icon">{Icons.Search}</span>
-                  <input className="top-search" placeholder="Search lessons, notes, tutors..." />
-                </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", flexShrink: 0 }}>
+            <button
+              className={`icon-btn theme-toggle-btn ${isDark ? "is-dark" : ""}`}
+              onClick={toggleTheme}
+              title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+              aria-label="Toggle dark and light mode"
+            >
+              <span key={isDark ? "sun" : "moon"} className="theme-toggle-icon">
+                {isDark ? Icons.Sun : Icons.Moon}
+              </span>
+            </button>
+
+            {!isGuest && <NotificationPanel />}
+
+            {isGuest ? (
+              <div style={{ display: "flex", gap: "8px" }}>
+                <button className="btn-secondary" onClick={() => navigate("/login")}>Login</button>
+                <button className="btn-primary" onClick={() => navigate("/signup")}>Sign up</button>
               </div>
-
-              <div style={{ display: "flex", alignItems: "center", gap: "10px", flexShrink: 0 }}>
-                <button className="icon-btn mobile-only" onClick={() => setMobileSearchOpen(true)} title="Search">
-                  {Icons.Search}
-                </button>
-
-                {!isGuest && <NotificationPanel />}
-
-                {isGuest ? (
-                  <div style={{ display: "flex", gap: "8px" }}>
-                    <button className="btn-secondary" onClick={() => navigate("/login")}>Login</button>
-                    <button className="btn-primary" onClick={() => navigate("/signup")}>Sign up</button>
-                  </div>
-                ) : (
-                  <button className="icon-btn desktop-only" onClick={handleLogout} title="Logout" style={{ color: "#EF4444" }}>
-                    {Icons.Logout}
-                  </button>
-                )}
-              </div>
-            </>
-          ) : (
-            <div style={{ display: "flex", alignItems: "center", gap: "10px", width: "100%" }}>
-              <button className="icon-btn" onClick={() => setMobileSearchOpen(false)} title="Back">←</button>
-              <div className="top-search-wrapper" style={{ maxWidth: "none", flex: 1 }}>
-                <span className="top-search-icon">{Icons.Search}</span>
-                <input className="top-search" placeholder="Search everything..." autoFocus />
-              </div>
-            </div>
-          )}
+            ) : (
+              <button className="icon-btn desktop-only" onClick={handleLogout} title="Logout" style={{ color: "#EF4444" }}>
+                {Icons.Logout}
+              </button>
+            )}
+          </div>
         </header>
 
         {/* PAGE CONTENT */}
